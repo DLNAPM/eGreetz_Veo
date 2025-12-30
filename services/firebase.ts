@@ -1,8 +1,11 @@
 
-// Fix: Consolidate modular imports and separate type declarations with 'import { type ... }' to ensure compatibility with TS resolution and avoid "no exported member" errors
-import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, type Auth, type User } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, orderBy, type Firestore } from 'firebase/firestore';
+// Fix: Consolidate modular imports and separate value/type declarations to ensure maximum compatibility and avoid "no exported member" errors
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import type { FirebaseApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import type { Auth, User } from 'firebase/auth';
+import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, orderBy } from 'firebase/firestore';
+import type { Firestore } from 'firebase/firestore';
 import { GreetingRecord } from '../types';
 
 // Provided Firebase configuration
@@ -77,7 +80,7 @@ export const logout = async () => {
   }
 };
 
-// Fix: Export a listener wrapper to ensure correct modular Firebase usage
+// Fix: Export a listener wrapper using standard named exports to ensure correct modular usage
 export const onAuthStateChangedListener = (callback: (user: User | null) => void) => {
   if (!auth) return () => {};
   return onAuthStateChanged(auth, callback);

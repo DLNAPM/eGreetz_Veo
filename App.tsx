@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-// Fix: Use 'import { type ... }' syntax for better compatibility with modular Firebase and TS resolutions
-import { type User } from 'firebase/auth';
+// Fix: Use standard named import for User to ensure compatibility and resolve "no exported member" errors in varying environments
+import { User } from 'firebase/auth';
 import { auth, loginWithGoogle, logout, getUserGreetings, saveGreeting, deleteGreeting, isFirebaseEnabled, onAuthStateChangedListener } from './services/firebase';
 import { AppState, GenerateGreetingParams, GreetingRecord, Occasion, GreetingTheme, VoiceGender, VeoModel, AspectRatio } from './types';
 import GreetingCreator from './components/GreetingCreator';
@@ -53,16 +53,13 @@ const App: React.FC = () => {
   };
 
   const handleGenerate = async (params: GenerateGreetingParams) => {
-    // 1. Pre-flight API Key check for AI Studio
+    // 1. Pre-flight API Key check for AI Studio specifically
     if (window.aistudio) {
       const hasKey = await window.aistudio.hasSelectedApiKey();
-      if (!hasKey || !process.env.API_KEY) {
+      if (!hasKey) {
         setShowApiKeyDialog(true);
         return;
       }
-    } else if (!process.env.API_KEY) {
-      alert("API Key is missing. Please set your Gemini API key in the environment.");
-      return;
     }
 
     // 2. Start generation flow
@@ -98,11 +95,14 @@ const App: React.FC = () => {
       const errorMessage = e.message || "Unknown error";
       const isApiKeyError = errorMessage.toLowerCase().includes("api key") || 
                            errorMessage.includes("Requested entity was not found") ||
-                           errorMessage.includes("not set");
+                           errorMessage.includes("not set") ||
+                           errorMessage.includes("API Key is required");
 
       if (isApiKeyError && window.aistudio) {
         // As per guidelines, if key selection is requested, trigger openSelectKey()
         await window.aistudio.openSelectKey();
+      } else if (isApiKeyError) {
+        alert("Authentication Error: The API Key is missing or invalid. Please ensure it is correctly set in your environment variables (e.g., using VITE_ prefix if necessary for your hosting).");
       } else {
         alert("Failed to generate greeting: " + errorMessage);
       }
