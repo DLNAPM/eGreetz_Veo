@@ -1,15 +1,14 @@
 
-// Fix: Consolidating type and value imports to resolve "no exported member" errors in mixed environments
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import type { FirebaseApp } from 'firebase/app';
 import { 
   getAuth, 
   GoogleAuthProvider, 
   signInWithPopup, 
   signOut, 
-  onAuthStateChanged,
-  User as FirebaseUser,
-  Auth
+  onAuthStateChanged
 } from 'firebase/auth';
+import type { User as FirebaseUser, Auth } from 'firebase/auth';
 import { 
   getFirestore, 
   collection, 
@@ -19,39 +18,78 @@ import {
   getDocs, 
   deleteDoc, 
   doc, 
-  orderBy,
-  Firestore
+  orderBy
 } from 'firebase/firestore';
+import type { Firestore } from 'firebase/firestore';
 import { GreetingRecord } from '../types';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyDUXkZHySvB2S1aiLBXK5nW5aD9GNBQT7g",
-  authDomain: "egreetz-d0846.firebaseapp.com",
-  projectId: "egreetz-d0846",
-  storageBucket: "egreetz-d0846.firebasestorage.app",
-  messagingSenderId: "546450368214",
-  appId: "1:546450368214:web:2e0827d27d3c0506174b77",
-  measurementId: "G-MRV9FYGGEQ"
+/**
+ * Safely accesses environment variables.
+ * In Vite, these are usually on import.meta.env, but we use process.env mapping
+ * via vite.config.js for maximum compatibility with Render.com.
+ */
+const getEnvVar = (key: string): string | undefined => {
+  // Check process.env first (defined in vite.config.js)
+  if (typeof process !== 'undefined' && process.env && process.env[key]) {
+    return process.env[key];
+  }
+  // Fallback to import.meta.env with safety check
+  try {
+    const metaEnv = (import.meta as any).env;
+    if (metaEnv && metaEnv[key]) {
+      return metaEnv[key];
+    }
+  } catch (e) {
+    // import.meta.env might not be available in all contexts
+  }
+  return undefined;
 };
+
+const getFirebaseConfig = () => {
+  // Option 1: Load from a single JSON string
+  const configStr = getEnvVar('VITE_FIREBASE_CONFIG');
+  if (configStr) {
+    try {
+      return JSON.parse(configStr);
+    } catch (e) {
+      console.error("Failed to parse VITE_FIREBASE_CONFIG environment variable:", e);
+    }
+  }
+  
+  // Option 2: Load from individual environment variables
+  return {
+    apiKey: getEnvVar('VITE_FIREBASE_API_KEY'),
+    authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN'),
+    projectId: getEnvVar('VITE_FIREBASE_PROJECT_ID'),
+    storageBucket: getEnvVar('VITE_FIREBASE_STORAGE_BUCKET'),
+    messagingSenderId: getEnvVar('VITE_FIREBASE_MESSAGING_SENDER_ID'),
+    appId: getEnvVar('VITE_FIREBASE_APP_ID'),
+    measurementId: getEnvVar('VITE_FIREBASE_MEASUREMENT_ID')
+  };
+};
+
+const firebaseConfig = getFirebaseConfig();
 
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
 
-try {
-  // Fix: Check if Firebase apps are already initialized to prevent duplicate initialization
-  if (getApps().length === 0) {
-    app = initializeApp(firebaseConfig);
-  } else {
-    app = getApp();
+// Only initialize if we have at least an API key present
+if (firebaseConfig && firebaseConfig.apiKey) {
+  try {
+    if (getApps().length === 0) {
+      app = initializeApp(firebaseConfig);
+    } else {
+      app = getApp();
+    }
+    
+    if (app) {
+      auth = getAuth(app);
+      db = getFirestore(app);
+    }
+  } catch (error) {
+    console.error("Firebase Initialization failed:", error);
   }
-  
-  if (app) {
-    auth = getAuth(app);
-    db = getFirestore(app);
-  }
-} catch (error) {
-  console.error("Firebase Initialization failed:", error);
 }
 
 const googleProvider = new GoogleAuthProvider();
@@ -59,7 +97,9 @@ const googleProvider = new GoogleAuthProvider();
 export const isFirebaseEnabled = () => !!app && !!auth && !!db;
 
 export const loginWithGoogle = async (): Promise<FirebaseUser> => {
-  if (!auth) throw new Error("Authentication service unavailable.");
+  if (!auth) {
+    throw new Error("Authentication service unavailable. Please ensure VITE_FIREBASE_... environment variables are set in your Render dashboard.");
+  }
   try {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;

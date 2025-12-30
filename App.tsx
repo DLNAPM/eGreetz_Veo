@@ -30,6 +30,7 @@ const App: React.FC = () => {
         setIsKeyConnected(hasKey);
       } else {
         // Fallback check for environment variables in standard browser environments
+        // This relies on vite.config.js mapping VITE_API_KEY to process.env.API_KEY
         const key = process.env.API_KEY;
         setIsKeyConnected(!!key);
       }
@@ -75,7 +76,7 @@ const App: React.FC = () => {
       setIsKeyConnected(true);
       setShowApiKeyDialog(false);
     } else {
-      alert("Please ensure your API_KEY environment variable is configured in your hosting dashboard.");
+      alert("Please ensure the VITE_API_KEY environment variable is configured in your hosting dashboard.");
     }
   };
 
@@ -85,6 +86,12 @@ const App: React.FC = () => {
       const hasKey = await window.aistudio.hasSelectedApiKey();
       if (!hasKey) {
         setShowApiKeyDialog(true);
+        return;
+      }
+    } else {
+      // Direct check for mapped process.env.API_KEY in non-AI Studio environment
+      if (!process.env.API_KEY) {
+        alert("Authentication Error: VITE_API_KEY is missing from environment.");
         return;
       }
     }
@@ -121,8 +128,8 @@ const App: React.FC = () => {
       if (errorMessage.includes("Requested entity was not found") && window.aistudio) {
         setIsKeyConnected(false);
         setShowApiKeyDialog(true);
-      } else if (errorMessage.includes("API Key")) {
-        alert("Authentication Error: Please ensure a valid paid API Key is selected or configured.");
+      } else if (errorMessage.includes("API Key") || errorMessage.includes("401") || errorMessage.includes("unauthorized")) {
+        alert("Authentication Error: Please ensure a valid paid API Key is selected or VITE_API_KEY is correctly configured.");
       } else {
         alert("Generation Interrupted: " + errorMessage);
       }
