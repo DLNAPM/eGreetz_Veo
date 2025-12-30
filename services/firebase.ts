@@ -1,11 +1,8 @@
 
-// Fix: Consolidate modular imports and separate type declarations to ensure compatibility with ESM resolution and avoid "no exported member" errors
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import type { FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import type { Auth, User } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, orderBy } from 'firebase/firestore';
-import type { Firestore } from 'firebase/firestore';
+// Fix: Consolidate modular imports and separate type declarations with 'import { type ... }' to ensure compatibility with TS resolution and avoid "no exported member" errors
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, type Auth, type User } from 'firebase/auth';
+import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, orderBy, type Firestore } from 'firebase/firestore';
 import { GreetingRecord } from '../types';
 
 // Provided Firebase configuration

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-// Fix: Use 'import type' for User to ensure compatibility with all TS versions and module resolution settings
-import type { User } from 'firebase/auth';
+// Fix: Use 'import { type ... }' syntax for better compatibility with modular Firebase and TS resolutions
+import { type User } from 'firebase/auth';
 import { auth, loginWithGoogle, logout, getUserGreetings, saveGreeting, deleteGreeting, isFirebaseEnabled, onAuthStateChangedListener } from './services/firebase';
 import { AppState, GenerateGreetingParams, GreetingRecord, Occasion, GreetingTheme, VoiceGender, VeoModel, AspectRatio } from './types';
 import GreetingCreator from './components/GreetingCreator';
@@ -53,12 +53,16 @@ const App: React.FC = () => {
   };
 
   const handleGenerate = async (params: GenerateGreetingParams) => {
-    // 1. Check for AI Studio environment and API Key selection
+    // 1. Pre-flight API Key check for AI Studio
     if (window.aistudio) {
-      if (!(await window.aistudio.hasSelectedApiKey())) {
+      const hasKey = await window.aistudio.hasSelectedApiKey();
+      if (!hasKey || !process.env.API_KEY) {
         setShowApiKeyDialog(true);
         return;
       }
+    } else if (!process.env.API_KEY) {
+      alert("API Key is missing. Please set your Gemini API key in the environment.");
+      return;
     }
 
     // 2. Start generation flow
@@ -90,21 +94,20 @@ const App: React.FC = () => {
     } catch (e: any) {
       console.error("Video Generation Error:", e);
       
-      // Handle missing entity or key errors by prompting for key again as per guidelines
+      // Handle common Gemini errors
       const errorMessage = e.message || "Unknown error";
-      if (errorMessage.includes("Requested entity was not found") || 
-          errorMessage.includes("API Key") || 
-          errorMessage.includes("not set")) {
-        if (window.aistudio) {
-          await window.aistudio.openSelectKey();
-        } else {
-          alert(`Configuration Error: ${errorMessage}. Please check your API Key.`);
-        }
+      const isApiKeyError = errorMessage.toLowerCase().includes("api key") || 
+                           errorMessage.includes("Requested entity was not found") ||
+                           errorMessage.includes("not set");
+
+      if (isApiKeyError && window.aistudio) {
+        // As per guidelines, if key selection is requested, trigger openSelectKey()
+        await window.aistudio.openSelectKey();
       } else {
         alert("Failed to generate greeting: " + errorMessage);
       }
       
-      // Return to IDLE state so the user can see the form again (which is preserved via 'hidden' class)
+      // Return to IDLE state so the user can see the form again (preserved via 'hidden' class)
       setAppState(AppState.IDLE);
     } finally {
       setIsLoading(false);
@@ -126,8 +129,8 @@ const App: React.FC = () => {
     setShowApiKeyDialog(false);
     if (window.aistudio) {
       await window.aistudio.openSelectKey();
-      // Proceed logic: after triggering dialog, guidelines say to assume success and proceed.
-      // We stay on the IDLE state so the user can click the generate button again.
+      // Guidelines: assume key selection was successful and proceed.
+      // We'll let the user click "Generate" again once they finish with the dialog.
     }
   };
 
@@ -222,9 +225,8 @@ const App: React.FC = () => {
         )}
 
         {/* 
-          CRITICAL: We use 'hidden' class instead of conditional mounting {appState === AppState.IDLE && ...}
-          to preserve the GreetingCreator's internal form state when transitioning to LOADING/SUCCESS/ERROR.
-          This prevents the "start over" bug where users lose their message if something fails.
+          CRITICAL: Use 'hidden' class to preserve form state during generation 
+          instead of unmounting the component, which prevents "starting over".
         */}
         <div className={(appState === AppState.IDLE) ? "w-full flex justify-center" : "hidden"}>
           <GreetingCreator onGenerate={handleGenerate} />
