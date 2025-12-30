@@ -6,12 +6,13 @@ import {
 } from '@google/genai';
 import { GenerateGreetingParams, VoiceGender, VeoModel } from '../types';
 
-// Fix: Always create a new GoogleGenAI instance inside the function right before the API call to ensure the latest API key from the environment is used.
+/**
+ * Generates a cinematic video greeting using Veo.
+ */
 export const generateGreetingVideo = async (
   params: GenerateGreetingParams
 ): Promise<{ objectUrl: string; blob: Blob }> => {
-  // Use the API key provided in the environment. 
-  // GUIDELINE: Always use process.env.API_KEY directly in the constructor
+  // GUIDELINE: Always use process.env.API_KEY string directly when initializing the @google/genai client
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   // If a photo is provided, we use the standard Veo model for reference-based generation
@@ -25,7 +26,6 @@ export const generateGreetingVideo = async (
     Context: ${params.message.substring(0, 300)}
   `.trim();
 
-  // Veo constraints for reference images: 720p and 16:9 are recommended for preview models
   const config: any = {
     numberOfVideos: 1,
     resolution: '720p',
@@ -38,7 +38,6 @@ export const generateGreetingVideo = async (
     config: config,
   };
 
-  // GUIDELINE: To generate a video with a starting image, use the 'image' property in the root of the request object.
   if (params.userPhoto) {
     payload.image = {
       imageBytes: params.userPhoto.base64,
@@ -49,7 +48,6 @@ export const generateGreetingVideo = async (
   try {
     let operation = await ai.models.generateVideos(payload);
 
-    // Poll until completion with reassuring wait times
     while (!operation.done) {
       // GUIDELINE: Video generation can take a few minutes. Poll every 10 seconds.
       await new Promise((resolve) => setTimeout(resolve, 10000));
@@ -58,9 +56,9 @@ export const generateGreetingVideo = async (
 
     const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
     if (downloadLink) {
-      // GUIDELINE: Use process.env.API_KEY directly when fetching video bytes from the operation download link.
+      // GUIDELINE: The response.body contains the MP4 bytes. You must append an API key when fetching from the download link.
       const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
-      if (!response.ok) throw new Error('Failed to download the generated video file.');
+      if (!response.ok) throw new Error('Failed to download the generated video file from Google Cloud.');
       
       const blob = await response.blob();
       return { objectUrl: URL.createObjectURL(blob), blob };
@@ -75,11 +73,9 @@ export const generateGreetingVideo = async (
 
 /**
  * Generates a warm greeting voice using Gemini TTS.
- * Note: The returned audio is raw PCM data (24kHz, 1 channel, 16-bit).
- * It must be decoded manually using AudioContext before playback as per Gemini guidelines.
  */
 export const generateGreetingVoice = async (text: string, voice: VoiceGender): Promise<string | null> => {
-  // Fix: Initializing GoogleGenAI with the API key from environment directly before use.
+  // GUIDELINE: Always use process.env.API_KEY string directly
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const voiceMap: Record<VoiceGender, string> = {
@@ -93,7 +89,6 @@ export const generateGreetingVoice = async (text: string, voice: VoiceGender): P
       model: "gemini-2.5-flash-preview-tts",
       contents: [{ parts: [{ text: `Say this greeting message warmly: ${text}` }] }],
       config: {
-        // GUIDELINE: Must be an array with a single `Modality.AUDIO` element.
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
@@ -104,8 +99,7 @@ export const generateGreetingVoice = async (text: string, voice: VoiceGender): P
     });
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    // GUIDELINE: The audio bytes returned by the API is raw PCM data. 
-    // It is not a standard file format like .wav or .mp3 and contains no header.
+    // Note: The consumer is responsible for PCM decoding as per guidelines.
     return base64Audio || null;
   } catch (e) {
     console.error("Voice Generation failed:", e);

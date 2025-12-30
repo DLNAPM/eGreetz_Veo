@@ -7,7 +7,7 @@ import GreetingGallery from './components/GreetingGallery';
 import GreetingResult from './components/GreetingResult';
 import LoadingIndicator from './components/LoadingIndicator';
 import ApiKeyDialog from './components/ApiKeyDialog';
-import { LogIn, LogOut, Plus, ShieldCheck, AlertCircle, Cpu, Key } from 'lucide-react';
+import { LogIn, LogOut, Plus, ShieldCheck, Key } from 'lucide-react';
 import { generateGreetingVideo } from './services/geminiService';
 
 const App: React.FC = () => {
@@ -25,6 +25,8 @@ const App: React.FC = () => {
       if (window.aistudio) {
         const hasKey = await window.aistudio.hasSelectedApiKey();
         setIsKeyConnected(hasKey);
+      } else if (process.env.API_KEY) {
+        setIsKeyConnected(true);
       }
     };
     
@@ -39,13 +41,15 @@ const App: React.FC = () => {
       setUser(u);
       if (u) {
         loadGreetings(u.uid);
-        setAppState(prev => (prev === AppState.AUTH ? AppState.GALLERY : prev));
+        if (appState === AppState.AUTH) {
+          setAppState(AppState.GALLERY);
+        }
       } else {
         setAppState(AppState.AUTH);
       }
     });
-    return unsubscribe;
-  }, []);
+    return () => unsubscribe();
+  }, [appState]);
 
   const loadGreetings = async (uid: string) => {
     if (!isFirebaseEnabled()) return;
@@ -56,18 +60,20 @@ const App: React.FC = () => {
   const handleConnectKey = async () => {
     if (window.aistudio) {
       await window.aistudio.openSelectKey();
-      setIsKeyConnected(true); // GUIDELINE: Assume success after triggering
+      setIsKeyConnected(true);
     }
   };
 
   const handleGenerate = async (params: GenerateGreetingParams) => {
-    // GUIDELINE: Veo models MANDATORY key selection check
     if (window.aistudio) {
       const hasKey = await window.aistudio.hasSelectedApiKey();
       if (!hasKey) {
         setShowApiKeyDialog(true);
         return;
       }
+    } else if (!process.env.API_KEY) {
+      alert("API Key missing: Please ensure API_KEY is set in your environment variables.");
+      return;
     }
 
     setIsLoading(true);
@@ -96,10 +102,8 @@ const App: React.FC = () => {
       setAppState(AppState.SUCCESS);
     } catch (e: any) {
       console.error("Video Generation Error:", e);
+      const errorMessage = e.toString();
       
-      const errorMessage = e.toString() || "An unexpected error occurred.";
-      
-      // GUIDELINE: Handle "Requested entity was not found" or general API Key issues
       const isApiKeyError = 
         errorMessage.toLowerCase().includes("api key") || 
         errorMessage.includes("Requested entity was not found") ||
@@ -107,12 +111,11 @@ const App: React.FC = () => {
         errorMessage.includes("API Key is required");
 
       if (isApiKeyError && window.aistudio) {
-        // GUIDELINE: If request fails with "Requested entity was not found", reset and prompt selection again
         setIsKeyConnected(false);
         await window.aistudio.openSelectKey();
-        setIsKeyConnected(true); // Proceed assuming user is selecting a key
+        setIsKeyConnected(true);
       } else if (isApiKeyError) {
-        alert("Authentication Required: This high-quality video model requires a paid Google Cloud project. Please configure your API_KEY environment variable.");
+        alert("Authentication Required: This high-quality video model requires a paid Google Cloud project. Please configure your API_KEY environment variable in Render.com.");
       } else {
         alert("Generation Interrupted: " + errorMessage);
       }
@@ -124,7 +127,7 @@ const App: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm("Permanently delete this cinematic greeting? This action cannot be undone.")) {
+    if (window.confirm("Permanently delete this cinematic greeting?")) {
       try {
         await deleteGreeting(id);
         if (user) loadGreetings(user.uid);
@@ -153,7 +156,7 @@ const App: React.FC = () => {
             <div className="flex items-center gap-1.5 mt-1.5">
               <span className={`flex h-2 w-2 rounded-full ${isKeyConnected ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`}></span>
               <span className="text-[10px] text-gray-400 font-black tracking-widest uppercase flex items-center gap-1">
-                {isKeyConnected ? 'Google Cloud Linked' : 'Key Selection Required'}
+                {isKeyConnected ? 'System Ready' : 'Key Check...'}
               </span>
             </div>
           </div>
@@ -212,12 +215,8 @@ const App: React.FC = () => {
               </div>
               <div>
                 <h4 className="font-black text-blue-100 text-sm uppercase tracking-widest">Enterprise Production Active</h4>
-                <p className="text-blue-400/80 text-xs mt-0.5 font-medium">Cloud storage and generation clusters are fully operational.</p>
+                <p className="text-blue-400/80 text-xs mt-0.5 font-medium">Cloud clusters fully operational with Render environment variables.</p>
               </div>
-            </div>
-            <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-blue-500/10 rounded-full border border-blue-500/20">
-              <Cpu size={12} className="text-blue-400" />
-              <span className="text-[10px] font-black text-blue-400 uppercase tracking-tighter">GPU Optimized</span>
             </div>
           </div>
         )}

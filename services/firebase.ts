@@ -1,14 +1,13 @@
 
-// Fix: Use standard Firebase v9 modular imports.
-// If "no exported member" errors persist, ensure the 'firebase' package is version 9 or later.
-import { initializeApp, getApps, getApp } from 'firebase/app';
+// Fix: Consolidating imports to ensure modular exports are correctly resolved
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { 
   getAuth, 
   GoogleAuthProvider, 
   signInWithPopup, 
   signOut, 
   onAuthStateChanged,
-  type User,
+  type User as FirebaseUser,
   type Auth
 } from 'firebase/auth';
 import { 
@@ -20,14 +19,14 @@ import {
   getDocs, 
   deleteDoc, 
   doc, 
-  orderBy, 
-  type Firestore 
+  orderBy,
+  type Firestore
 } from 'firebase/firestore';
 import { GreetingRecord } from '../types';
 
-// Provided Production Firebase configuration
+// Production Firebase configuration using environment variables
 const firebaseConfig = {
-  apiKey: "AIzaSyDUXkZHySvB2S1aiLBXK5nW5aD9GNBQT7g",
+  apiKey: process.env.API_KEY,
   authDomain: "egreetz-d0846.firebaseapp.com",
   projectId: "egreetz-d0846",
   storageBucket: "egreetz-d0846.firebasestorage.app",
@@ -37,16 +36,18 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase App
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+// Fix: Ensure app initialization handles environment-specific type resolution
+const app: FirebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 // Initialize Services
-const auth = getAuth(app);
-const db = getFirestore(app);
+// CRITICAL: Immediately call getAuth and getFirestore to register components with the App instance
+const auth: Auth = getAuth(app);
+const db: Firestore = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
 
-export const isFirebaseEnabled = () => !!app && !!auth && !!db;
+export const isFirebaseEnabled = () => !!app && !!auth && !!db && !!process.env.API_KEY;
 
-export const loginWithGoogle = async () => {
+export const loginWithGoogle = async (): Promise<FirebaseUser> => {
   if (!auth) throw new Error("Firebase Auth service not available");
   try {
     const result = await signInWithPopup(auth, googleProvider);
@@ -57,7 +58,7 @@ export const loginWithGoogle = async () => {
   }
 };
 
-export const logout = async () => {
+export const logout = async (): Promise<void> => {
   if (!auth) return;
   try {
     await signOut(auth);
@@ -66,7 +67,7 @@ export const logout = async () => {
   }
 };
 
-export const onAuthStateChangedListener = (callback: (user: User | null) => void) => {
+export const onAuthStateChangedListener = (callback: (user: FirebaseUser | null) => void) => {
   if (!auth) return () => {};
   return onAuthStateChanged(auth, callback);
 };
@@ -95,10 +96,11 @@ export const getUserGreetings = async (userId: string): Promise<GreetingRecord[]
   }
 };
 
-export const deleteGreeting = async (greetingId: string) => {
+export const deleteGreeting = async (greetingId: string): Promise<void> => {
   if (!db) throw new Error("Firestore service not available");
-  await deleteDoc(doc(db, 'greetings', greetingId));
+  const docRef = doc(db, 'greetings', greetingId);
+  await deleteDoc(docRef);
 };
 
-export type { User, Auth };
+export type User = FirebaseUser;
 export { auth, db };
