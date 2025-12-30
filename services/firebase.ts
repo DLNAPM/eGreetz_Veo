@@ -1,8 +1,11 @@
 
-// Fix: Consolidate modular imports into single lines with inline type declarations to resolve "no exported member" errors during build
-import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, type Auth, type User } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, orderBy, type Firestore } from 'firebase/firestore';
+// Fix: Separate value and type imports from Firebase modular SDK to resolve resolution errors
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import type { FirebaseApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import type { Auth, User } from 'firebase/auth';
+import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, orderBy } from 'firebase/firestore';
+import type { Firestore } from 'firebase/firestore';
 import { GreetingRecord } from '../types';
 
 // Provided Firebase configuration
@@ -77,7 +80,7 @@ export const logout = async () => {
   }
 };
 
-// Fix: Export a listener wrapper using standard named exports to ensure correct modular usage
+// Fix: Use standard listener wrapper for modular Firebase auth state
 export const onAuthStateChangedListener = (callback: (user: User | null) => void) => {
   if (!auth) return () => {};
   return onAuthStateChanged(auth, callback);
@@ -112,4 +115,6 @@ export const deleteGreeting = async (greetingId: string) => {
   await deleteDoc(doc(db, 'greetings', greetingId));
 };
 
+// Re-export User type to fix resolution issues in other components
+export type { User };
 export { auth, db };
