@@ -13,12 +13,14 @@ export const generateGreetingVideo = async (
   params: GenerateGreetingParams
 ): Promise<{ objectUrl: string; blob: Blob }> => {
   // Always create a new instance to ensure we have the latest API key from state/env
-  // CRITICAL: Must use process.env.API_KEY directly when initializing the GoogleGenAI instance.
-  if (!process.env.API_KEY) {
-    throw new Error("API Key must be set. Please ensure you have selected an API key in the connection dialog.");
+  // NOTE: Rely on the environment variable injection.
+  const apiKey = process.env.API_KEY;
+  
+  if (!apiKey) {
+    throw new Error("API Key is missing. If you are in AI Studio, please select a paid API key. If deployed, ensure the API_KEY environment variable is set.");
   }
   
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey });
 
   const modelToUse = params.userPhoto ? 'veo-3.1-generate-preview' : params.model;
 
@@ -63,7 +65,7 @@ export const generateGreetingVideo = async (
     const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
     if (downloadLink) {
       // CRITICAL: Append an API key when fetching from the download link.
-      const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+      const response = await fetch(`${downloadLink}&key=${apiKey}`);
       if (!response.ok) throw new Error('Failed to download the generated video file.');
       
       const blob = await response.blob();
@@ -81,10 +83,10 @@ export const generateGreetingVideo = async (
  * Generates audio for a greeting message using Gemini TTS.
  */
 export const generateGreetingVoice = async (text: string, voice: VoiceGender): Promise<string | null> => {
-  // CRITICAL: Use process.env.API_KEY directly for initialization.
-  if (!process.env.API_KEY) return null;
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) return null;
   
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey });
   
   const voiceMap: Record<VoiceGender, string> = {
     [VoiceGender.MALE_TENOR]: 'Kore',
@@ -107,7 +109,6 @@ export const generateGreetingVoice = async (text: string, voice: VoiceGender): P
     });
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    // PCM audio requires specialized decoding as per guidelines; returning base64 for now.
     return base64Audio ? `data:audio/pcm;base64,${base64Audio}` : null;
   } catch (e) {
     console.error("Voice Generation failed:", e);

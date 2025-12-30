@@ -1,15 +1,15 @@
 
-// Fix: Separating type and value imports to resolve "no exported member" errors in mixed environments
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import type { FirebaseApp } from 'firebase/app';
+// Fix: Consolidating type and value imports to resolve "no exported member" errors in mixed environments
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { 
   getAuth, 
   GoogleAuthProvider, 
   signInWithPopup, 
   signOut, 
-  onAuthStateChanged
+  onAuthStateChanged,
+  User as FirebaseUser,
+  Auth
 } from 'firebase/auth';
-import type { User as FirebaseUser, Auth } from 'firebase/auth';
 import { 
   getFirestore, 
   collection, 
@@ -19,9 +19,9 @@ import {
   getDocs, 
   deleteDoc, 
   doc, 
-  orderBy
+  orderBy,
+  Firestore
 } from 'firebase/firestore';
-import type { Firestore } from 'firebase/firestore';
 import { GreetingRecord } from '../types';
 
 const firebaseConfig = {

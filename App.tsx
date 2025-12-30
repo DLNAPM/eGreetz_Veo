@@ -21,17 +21,17 @@ const App: React.FC = () => {
   const [isFirebaseReady, setIsFirebaseReady] = useState(false);
 
   useEffect(() => {
-    // Initial setup
     const init = async () => {
       setIsFirebaseReady(isFirebaseEnabled());
       
+      // Check for key in AI Studio environment
       if (window.aistudio) {
         const hasKey = await window.aistudio.hasSelectedApiKey();
         setIsKeyConnected(hasKey);
       } else {
-        // Fallback for standard environment variables
-        const apiKey = typeof process !== 'undefined' ? process.env.API_KEY : undefined;
-        setIsKeyConnected(!!apiKey);
+        // Fallback check for environment variables in standard browser environments
+        const key = process.env.API_KEY;
+        setIsKeyConnected(!!key);
       }
     };
     
@@ -52,7 +52,7 @@ const App: React.FC = () => {
     return () => {
       if (typeof unsubscribe === 'function') unsubscribe();
     };
-  }, []);
+  }, [appState]);
 
   const loadGreetings = async (uid: string) => {
     const data = await getUserGreetings(uid);
@@ -64,29 +64,27 @@ const App: React.FC = () => {
       await loginWithGoogle();
     } catch (err: any) {
       console.error("Login Error:", err);
-      alert("Login failed. This may happen if the project is in testing mode or the domain is not authorized in Firebase Console.");
+      alert("Login failed. Check your Firebase domain authorization.");
     }
   };
 
   const handleConnectKey = async () => {
     if (window.aistudio) {
       await window.aistudio.openSelectKey();
-      // Per guideline: Assume success and proceed
+      // Assume selection successful as per guidelines to avoid race condition
       setIsKeyConnected(true);
       setShowApiKeyDialog(false);
     } else {
-      alert("Please ensure your API_KEY is set in the environment variables.");
+      alert("Please ensure your API_KEY environment variable is configured in your hosting dashboard.");
     }
   };
 
   const handleGenerate = async (params: GenerateGreetingParams) => {
-    // Force key selection for Veo models if not connected
-    if (!isKeyConnected) {
-      if (window.aistudio) {
+    // Check key status before proceeding, specifically for Veo models
+    if (window.aistudio) {
+      const hasKey = await window.aistudio.hasSelectedApiKey();
+      if (!hasKey) {
         setShowApiKeyDialog(true);
-        return;
-      } else if (!process.env.API_KEY) {
-        alert("API Key missing. Please set your Gemini API key in the environment.");
         return;
       }
     }
@@ -119,9 +117,12 @@ const App: React.FC = () => {
       console.error("Video Generation Error:", e);
       const errorMessage = e.toString();
       
+      // Handle key-specific errors
       if (errorMessage.includes("Requested entity was not found") && window.aistudio) {
         setIsKeyConnected(false);
         setShowApiKeyDialog(true);
+      } else if (errorMessage.includes("API Key")) {
+        alert("Authentication Error: Please ensure a valid paid API Key is selected or configured.");
       } else {
         alert("Generation Interrupted: " + errorMessage);
       }
@@ -162,7 +163,7 @@ const App: React.FC = () => {
             <div className="flex items-center gap-1.5 mt-1.5">
               <span className={`flex h-2 w-2 rounded-full ${isKeyConnected ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`}></span>
               <span className="text-[10px] text-gray-400 font-black tracking-widest uppercase flex items-center gap-1">
-                {isKeyConnected ? 'AI System Active' : 'Key Selection Required'}
+                {isKeyConnected ? 'System Operational' : 'Key Selection Required'}
               </span>
             </div>
           </div>
@@ -186,7 +187,7 @@ const App: React.FC = () => {
               >
                 <Plus size={16} strokeWidth={3} /> Create New
               </button>
-              <button onClick={logout} className="p-2 text-gray-500 hover:text-white transition-colors">
+              <button onClick={logout} className="p-2 text-gray-500 hover:text-white transition-colors" title="Sign Out">
                 <LogOut size={20} />
               </button>
             </>
@@ -203,9 +204,9 @@ const App: React.FC = () => {
 
       <main className="flex-grow flex flex-col items-center p-6 w-full max-w-6xl mx-auto">
         {!isFirebaseReady && (
-          <div className="w-full max-w-4xl mb-6 p-4 bg-red-900/20 border border-red-500/30 rounded-2xl flex items-center gap-3 text-red-200 text-sm">
-            <AlertCircle size={20} />
-            <span>Firebase services are currently offline. Local generation is still available.</span>
+          <div className="w-full max-w-4xl mb-6 p-4 bg-blue-900/10 border border-blue-500/20 rounded-2xl flex items-center gap-3 text-blue-200 text-sm">
+            <AlertCircle size={20} className="text-blue-400" />
+            <span>Cloud Sync Offline: Personal collection will not be saved.</span>
           </div>
         )}
 
@@ -220,7 +221,7 @@ const App: React.FC = () => {
               >
                 Start Creating
               </button>
-              {!user && (
+              {!user && isFirebaseReady && (
                 <button 
                   onClick={handleLogin}
                   className="px-16 py-6 bg-white/5 border border-white/10 rounded-3xl text-2xl font-black hover:bg-white/10 transition-all uppercase tracking-widest"
