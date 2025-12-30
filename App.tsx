@@ -1,5 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
-import { User } from 'firebase/auth';
+// Fix: Use 'import { type User }' to resolve exported member error in some environments
+import { type User } from 'firebase/auth';
 import { auth, loginWithGoogle, logout, getUserGreetings, saveGreeting, deleteGreeting, isFirebaseEnabled } from './services/firebase';
 import { AppState, GenerateGreetingParams, GreetingRecord, Occasion, GreetingTheme, VoiceGender, VeoModel, AspectRatio } from './types';
 import GreetingCreator from './components/GreetingCreator';
@@ -27,7 +29,8 @@ const App: React.FC = () => {
     }
 
     const unsubscribe = auth!.onAuthStateChanged(async (u) => {
-      setUser(u);
+      // Fix: Cast to User | null to ensure type compatibility
+      setUser(u as User | null);
       if (u) {
         setAppState(AppState.GALLERY);
         loadGreetings(u.uid);
@@ -71,8 +74,14 @@ const App: React.FC = () => {
 
       setCurrentResult({ url: objectUrl, params });
       setAppState(AppState.SUCCESS);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      // Fix: If Veo request fails due to missing entity (often API key related), prompt for key selection
+      if (e.message?.includes("Requested entity was not found")) {
+        if (window.aistudio) {
+          await window.aistudio.openSelectKey();
+        }
+      }
       setAppState(user ? AppState.GALLERY : AppState.IDLE);
     } finally {
       setIsLoading(false);
