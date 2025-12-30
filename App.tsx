@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { auth, loginWithGoogle, logout, getUserGreetings, saveGreeting, deleteGreeting, isFirebaseEnabled, onAuthStateChangedListener, type User } from './services/firebase';
-import { AppState, GenerateGreetingParams, GreetingRecord, Occasion, GreetingTheme, VoiceGender, VeoModel, AspectRatio } from './types';
+import { loginWithGoogle, logout, getUserGreetings, saveGreeting, deleteGreeting, isFirebaseEnabled, onAuthStateChangedListener, type User } from './services/firebase';
+import { AppState, GenerateGreetingParams, GreetingRecord } from './types';
 import GreetingCreator from './components/GreetingCreator';
 import GreetingGallery from './components/GreetingGallery';
 import GreetingResult from './components/GreetingResult';
@@ -37,7 +37,7 @@ const App: React.FC = () => {
       setConnectionStatus('error');
     }
 
-    const unsubscribe = onAuthStateChangedListener(async (u) => {
+    const unsubscribe = onAuthStateChangedListener((u) => {
       setUser(u);
       if (u) {
         loadGreetings(u.uid);
@@ -55,6 +55,20 @@ const App: React.FC = () => {
     if (!isFirebaseEnabled()) return;
     const data = await getUserGreetings(uid);
     setGreetings(data);
+  };
+
+  const handleLogin = async () => {
+    try {
+      await loginWithGoogle();
+      // Auth state listener handles the redirection
+    } catch (err: any) {
+      console.error("Login attempt failed:", err);
+      if (err.message?.includes('API Key is not valid')) {
+        alert("Authentication Error: The API Key provided in your environment is not authorized for this project's Firebase services. Check your GCP project restrictions.");
+      } else {
+        alert("Login failed. Please check your internet connection and try again.");
+      }
+    }
   };
 
   const handleConnectKey = async () => {
@@ -190,7 +204,7 @@ const App: React.FC = () => {
             </>
           ) : isFirebaseEnabled() ? (
             <button 
-              onClick={loginWithGoogle}
+              onClick={handleLogin}
               className="flex items-center gap-2 px-7 py-2.5 bg-white text-black font-black rounded-full hover:bg-gray-200 transition-all text-sm uppercase tracking-wider"
             >
               <LogIn size={16} strokeWidth={3} /> Account Login
@@ -226,7 +240,7 @@ const App: React.FC = () => {
             <h2 className="text-7xl font-black mb-8 leading-[1] text-white tracking-tighter">Cinematic Greeting <span className="text-blue-600">Reimagined.</span></h2>
             <p className="text-2xl text-gray-500 mb-12 leading-relaxed font-medium">Generate Hollywood-grade video greetings with custom AI voices and personalized visuals in seconds.</p>
             <button 
-              onClick={isFirebaseEnabled() ? loginWithGoogle : () => setAppState(AppState.IDLE)}
+              onClick={isFirebaseEnabled() ? handleLogin : () => setAppState(AppState.IDLE)}
               className="px-16 py-6 bg-blue-600 rounded-3xl text-2xl font-black hover:bg-blue-500 transition-all shadow-2xl shadow-blue-600/40 hover:-translate-y-1 active:scale-95 uppercase tracking-widest"
             >
               {isFirebaseEnabled() ? 'Access Secure Portal' : 'Initialize Creator'}
