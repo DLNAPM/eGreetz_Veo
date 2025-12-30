@@ -1,14 +1,11 @@
 
-// Fix: Separate value and type imports from Firebase modular SDK to resolve resolution errors
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import type { FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import type { Auth, User } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, orderBy } from 'firebase/firestore';
-import type { Firestore } from 'firebase/firestore';
+// Fix: Consolidate value and type imports from Firebase modular SDK to resolve resolution errors
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, type Auth, type User } from 'firebase/auth';
+import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, orderBy, type Firestore } from 'firebase/firestore';
 import { GreetingRecord } from '../types';
 
-// Provided Firebase configuration
+// Provided Production Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyDUXkZHySvB2S1aiLBXK5nW5aD9GNBQT7g",
   authDomain: "egreetz-d0846.firebaseapp.com",
@@ -35,28 +32,21 @@ const initializeFirebase = () => {
         config = JSON.parse(envConfig);
       }
     } catch (e) {
-      // Silently fall back to provided config
+      // Use fallback
     }
 
     if (!config.apiKey || config.apiKey === "undefined") {
-      console.warn("Firebase config missing. Features disabled.");
       return;
     }
 
-    // Initialize App
     app = getApps().length === 0 ? initializeApp(config) : getApp();
-    
-    // Initialize services directly using the app instance
     auth = getAuth(app);
     db = getFirestore(app);
-    
-    console.log("Firebase initialized successfully");
   } catch (error) {
-    console.error("Firebase initialization failed:", error);
+    console.error("Firebase Production Initialization failed:", error);
   }
 };
 
-// Execute initialization immediately
 initializeFirebase();
 
 const googleProvider = new GoogleAuthProvider();
@@ -69,7 +59,7 @@ export const loginWithGoogle = async () => {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
   } catch (error) {
-    console.error("Login failed:", error);
+    console.error("Production login failed:", error);
     throw error;
   }
 };
@@ -80,14 +70,13 @@ export const logout = async () => {
   }
 };
 
-// Fix: Use standard listener wrapper for modular Firebase auth state
 export const onAuthStateChangedListener = (callback: (user: User | null) => void) => {
   if (!auth) return () => {};
   return onAuthStateChanged(auth, callback);
 };
 
 export const saveGreeting = async (userId: string, greeting: Omit<GreetingRecord, 'id'>) => {
-  if (!db) throw new Error("Firestore not initialized");
+  if (!db) throw new Error("Firestore Production collection not initialized");
   return await addDoc(collection(db, 'greetings'), {
     ...greeting,
     userId
@@ -105,7 +94,7 @@ export const getUserGreetings = async (userId: string): Promise<GreetingRecord[]
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GreetingRecord));
   } catch (error) {
-    console.error("Failed to fetch greetings:", error);
+    console.error("Failed to fetch production greetings:", error);
     return [];
   }
 };
@@ -115,6 +104,5 @@ export const deleteGreeting = async (greetingId: string) => {
   await deleteDoc(doc(db, 'greetings', greetingId));
 };
 
-// Re-export User type to fix resolution issues in other components
 export type { User };
 export { auth, db };
