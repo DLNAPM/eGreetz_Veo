@@ -1,13 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { loginWithGoogle, logout, getUserGreetings, saveGreeting, deleteGreeting, isFirebaseEnabled, onAuthStateChangedListener, type User } from './services/firebase';
-import { AppState, GenerateGreetingParams, GreetingRecord } from './types';
+import { AppState, GenerateGreetingParams, GreetingRecord, VeoModel, AspectRatio } from './types';
 import GreetingCreator from './components/GreetingCreator';
 import GreetingGallery from './components/GreetingGallery';
 import GreetingResult from './components/GreetingResult';
 import LoadingIndicator from './components/LoadingIndicator';
 import ApiKeyDialog from './components/ApiKeyDialog';
-import { LogIn, LogOut, Plus, ShieldCheck, Key } from 'lucide-react';
+import { LogIn, LogOut, Plus, ShieldCheck, Cpu, Key } from 'lucide-react';
 import { generateGreetingVideo } from './services/geminiService';
 
 const App: React.FC = () => {
@@ -48,7 +48,10 @@ const App: React.FC = () => {
         setAppState(AppState.AUTH);
       }
     });
-    return () => unsubscribe();
+    
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
   }, [appState]);
 
   const loadGreetings = async (uid: string) => {
@@ -60,14 +63,9 @@ const App: React.FC = () => {
   const handleLogin = async () => {
     try {
       await loginWithGoogle();
-      // Auth state listener handles the redirection
     } catch (err: any) {
-      console.error("Login attempt failed:", err);
-      if (err.message?.includes('API Key is not valid')) {
-        alert("Authentication Error: The API Key provided in your environment is not authorized for this project's Firebase services. Check your GCP project restrictions.");
-      } else {
-        alert("Login failed. Please check your internet connection and try again.");
-      }
+      console.error("Login Error:", err);
+      alert(err.message || "Failed to log in. Please try again.");
     }
   };
 
@@ -85,9 +83,6 @@ const App: React.FC = () => {
         setShowApiKeyDialog(true);
         return;
       }
-    } else if (!process.env.API_KEY) {
-      alert("API Key missing: Please ensure API_KEY is set in your environment variables.");
-      return;
     }
 
     setIsLoading(true);
@@ -128,8 +123,6 @@ const App: React.FC = () => {
         setIsKeyConnected(false);
         await window.aistudio.openSelectKey();
         setIsKeyConnected(true);
-      } else if (isApiKeyError) {
-        alert("Authentication Required: This high-quality video model requires a paid Google Cloud project. Please configure your API_KEY environment variable in Render.com.");
       } else {
         alert("Generation Interrupted: " + errorMessage);
       }
@@ -170,7 +163,7 @@ const App: React.FC = () => {
             <div className="flex items-center gap-1.5 mt-1.5">
               <span className={`flex h-2 w-2 rounded-full ${isKeyConnected ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`}></span>
               <span className="text-[10px] text-gray-400 font-black tracking-widest uppercase flex items-center gap-1">
-                {isKeyConnected ? 'System Ready' : 'Key Check...'}
+                {isKeyConnected ? 'System Ready' : 'Key Selection Required'}
               </span>
             </div>
           </div>
@@ -229,8 +222,12 @@ const App: React.FC = () => {
               </div>
               <div>
                 <h4 className="font-black text-blue-100 text-sm uppercase tracking-widest">Enterprise Production Active</h4>
-                <p className="text-blue-400/80 text-xs mt-0.5 font-medium">Cloud clusters fully operational with Render environment variables.</p>
+                <p className="text-blue-400/80 text-xs mt-0.5 font-medium">Cloud storage and generation clusters are fully operational.</p>
               </div>
+            </div>
+            <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-blue-500/10 rounded-full border border-blue-500/20">
+              <Cpu size={12} className="text-blue-400" />
+              <span className="text-[10px] font-black text-blue-400 uppercase tracking-tighter">GPU Optimized</span>
             </div>
           </div>
         )}
