@@ -7,7 +7,7 @@ import GreetingGallery from './components/GreetingGallery';
 import GreetingResult from './components/GreetingResult';
 import LoadingIndicator from './components/LoadingIndicator';
 import ApiKeyDialog from './components/ApiKeyDialog';
-import { LogIn, LogOut, Plus, ShieldCheck, Cpu, Key } from 'lucide-react';
+import { LogIn, LogOut, Plus, ShieldCheck, Key, AlertCircle } from 'lucide-react';
 import { generateGreetingVideo } from './services/geminiService';
 
 const App: React.FC = () => {
@@ -18,24 +18,24 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
   const [isKeyConnected, setIsKeyConnected] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'error' | 'none'>('none');
+  const [isFirebaseReady, setIsFirebaseReady] = useState(false);
 
   useEffect(() => {
-    const checkKeyStatus = async () => {
+    // Initial setup
+    const init = async () => {
+      setIsFirebaseReady(isFirebaseEnabled());
+      
       if (window.aistudio) {
         const hasKey = await window.aistudio.hasSelectedApiKey();
         setIsKeyConnected(hasKey);
-      } else if (process.env.API_KEY) {
-        setIsKeyConnected(true);
+      } else {
+        // Fallback for standard environment variables
+        const apiKey = typeof process !== 'undefined' ? process.env.API_KEY : undefined;
+        setIsKeyConnected(!!apiKey);
       }
     };
     
-    checkKeyStatus();
-    if (isFirebaseEnabled()) {
-      setConnectionStatus('connected');
-    } else {
-      setConnectionStatus('error');
-    }
+    init();
 
     const unsubscribe = onAuthStateChangedListener((u) => {
       setUser(u);
@@ -52,10 +52,9 @@ const App: React.FC = () => {
     return () => {
       if (typeof unsubscribe === 'function') unsubscribe();
     };
-  }, [appState]);
+  }, []);
 
   const loadGreetings = async (uid: string) => {
-    if (!isFirebaseEnabled()) return;
     const data = await getUserGreetings(uid);
     setGreetings(data);
   };
@@ -65,22 +64,29 @@ const App: React.FC = () => {
       await loginWithGoogle();
     } catch (err: any) {
       console.error("Login Error:", err);
-      alert(err.message || "Failed to log in. Please try again.");
+      alert("Login failed. This may happen if the project is in testing mode or the domain is not authorized in Firebase Console.");
     }
   };
 
   const handleConnectKey = async () => {
     if (window.aistudio) {
       await window.aistudio.openSelectKey();
+      // Per guideline: Assume success and proceed
       setIsKeyConnected(true);
+      setShowApiKeyDialog(false);
+    } else {
+      alert("Please ensure your API_KEY is set in the environment variables.");
     }
   };
 
   const handleGenerate = async (params: GenerateGreetingParams) => {
-    if (window.aistudio) {
-      const hasKey = await window.aistudio.hasSelectedApiKey();
-      if (!hasKey) {
+    // Force key selection for Veo models if not connected
+    if (!isKeyConnected) {
+      if (window.aistudio) {
         setShowApiKeyDialog(true);
+        return;
+      } else if (!process.env.API_KEY) {
+        alert("API Key missing. Please set your Gemini API key in the environment.");
         return;
       }
     }
@@ -91,7 +97,7 @@ const App: React.FC = () => {
     try {
       const { objectUrl } = await generateGreetingVideo(params);
       
-      if (user && isFirebaseEnabled()) {
+      if (user && isFirebaseReady) {
         try {
           await saveGreeting(user.uid, {
             userId: user.uid,
@@ -113,16 +119,9 @@ const App: React.FC = () => {
       console.error("Video Generation Error:", e);
       const errorMessage = e.toString();
       
-      const isApiKeyError = 
-        errorMessage.toLowerCase().includes("api key") || 
-        errorMessage.includes("Requested entity was not found") ||
-        errorMessage.includes("not set") ||
-        errorMessage.includes("API Key is required");
-
-      if (isApiKeyError && window.aistudio) {
+      if (errorMessage.includes("Requested entity was not found") && window.aistudio) {
         setIsKeyConnected(false);
-        await window.aistudio.openSelectKey();
-        setIsKeyConnected(true);
+        setShowApiKeyDialog(true);
       } else {
         alert("Generation Interrupted: " + errorMessage);
       }
@@ -146,12 +145,12 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#000000] text-white flex flex-col font-sans selection:bg-blue-600/30">
-      {showApiKeyDialog && <ApiKeyDialog onContinue={() => { setShowApiKeyDialog(false); handleConnectKey(); }} />}
+      {showApiKeyDialog && <ApiKeyDialog onContinue={handleConnectKey} />}
       
       <header className="px-6 py-5 flex justify-between items-center border-b border-white/5 bg-black/95 backdrop-blur-xl sticky top-0 z-50">
         <div 
           className="flex items-center gap-2 cursor-pointer group" 
-          onClick={() => (user || !isFirebaseEnabled()) && setAppState(user ? AppState.GALLERY : AppState.IDLE)}
+          onClick={() => setAppState(user ? AppState.GALLERY : AppState.AUTH)}
         >
           <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-bold text-xl shadow-[0_0_20px_rgba(37,99,235,0.4)] group-hover:scale-105 transition-transform">
             eG
@@ -163,7 +162,7 @@ const App: React.FC = () => {
             <div className="flex items-center gap-1.5 mt-1.5">
               <span className={`flex h-2 w-2 rounded-full ${isKeyConnected ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`}></span>
               <span className="text-[10px] text-gray-400 font-black tracking-widest uppercase flex items-center gap-1">
-                {isKeyConnected ? 'System Ready' : 'Key Selection Required'}
+                {isKeyConnected ? 'AI System Active' : 'Key Selection Required'}
               </span>
             </div>
           </div>
@@ -175,7 +174,7 @@ const App: React.FC = () => {
               onClick={handleConnectKey}
               className="hidden md:flex items-center gap-2 px-4 py-2 border border-blue-500/30 bg-blue-500/10 text-blue-400 rounded-full hover:bg-blue-500 hover:text-white transition-all font-bold text-xs uppercase tracking-wider"
             >
-              <Key size={14} /> Connect Cloud Billing
+              <Key size={14} /> Connect Billing
             </button>
           )}
 
@@ -187,48 +186,26 @@ const App: React.FC = () => {
               >
                 <Plus size={16} strokeWidth={3} /> Create New
               </button>
-              <button 
-                onClick={logout}
-                className="p-2 text-gray-500 hover:text-white transition-colors"
-                title="Sign Out"
-              >
+              <button onClick={logout} className="p-2 text-gray-500 hover:text-white transition-colors">
                 <LogOut size={20} />
               </button>
             </>
-          ) : isFirebaseEnabled() ? (
+          ) : (
             <button 
               onClick={handleLogin}
               className="flex items-center gap-2 px-7 py-2.5 bg-white text-black font-black rounded-full hover:bg-gray-200 transition-all text-sm uppercase tracking-wider"
             >
-              <LogIn size={16} strokeWidth={3} /> Account Login
-            </button>
-          ) : (
-            <button 
-              onClick={() => setAppState(AppState.IDLE)}
-              className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white font-black rounded-full hover:bg-blue-500 transition-all text-sm shadow-xl shadow-blue-600/30"
-            >
-              <Plus size={16} strokeWidth={3} /> Start Creating
+              <LogIn size={16} strokeWidth={3} /> Login
             </button>
           )}
         </div>
       </header>
 
       <main className="flex-grow flex flex-col items-center p-6 w-full max-w-6xl mx-auto">
-        {connectionStatus === 'connected' && (appState === AppState.IDLE || appState === AppState.AUTH) && (
-          <div className="w-full max-w-4xl mb-10 p-5 bg-blue-900/10 border border-blue-500/20 rounded-2xl flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-blue-600/20 rounded-xl">
-                <ShieldCheck className="text-blue-400" size={24} />
-              </div>
-              <div>
-                <h4 className="font-black text-blue-100 text-sm uppercase tracking-widest">Enterprise Production Active</h4>
-                <p className="text-blue-400/80 text-xs mt-0.5 font-medium">Cloud storage and generation clusters are fully operational.</p>
-              </div>
-            </div>
-            <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-blue-500/10 rounded-full border border-blue-500/20">
-              <Cpu size={12} className="text-blue-400" />
-              <span className="text-[10px] font-black text-blue-400 uppercase tracking-tighter">GPU Optimized</span>
-            </div>
+        {!isFirebaseReady && (
+          <div className="w-full max-w-4xl mb-6 p-4 bg-red-900/20 border border-red-500/30 rounded-2xl flex items-center gap-3 text-red-200 text-sm">
+            <AlertCircle size={20} />
+            <span>Firebase services are currently offline. Local generation is still available.</span>
           </div>
         )}
 
@@ -236,12 +213,22 @@ const App: React.FC = () => {
           <div className="flex-grow flex flex-col items-center justify-center text-center max-w-3xl animate-in fade-in zoom-in duration-1000">
             <h2 className="text-7xl font-black mb-8 leading-[1] text-white tracking-tighter">Cinematic Greeting <span className="text-blue-600">Reimagined.</span></h2>
             <p className="text-2xl text-gray-500 mb-12 leading-relaxed font-medium">Generate Hollywood-grade video greetings with custom AI voices and personalized visuals in seconds.</p>
-            <button 
-              onClick={isFirebaseEnabled() ? handleLogin : () => setAppState(AppState.IDLE)}
-              className="px-16 py-6 bg-blue-600 rounded-3xl text-2xl font-black hover:bg-blue-500 transition-all shadow-2xl shadow-blue-600/40 hover:-translate-y-1 active:scale-95 uppercase tracking-widest"
-            >
-              {isFirebaseEnabled() ? 'Access Secure Portal' : 'Initialize Creator'}
-            </button>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <button 
+                onClick={() => setAppState(AppState.IDLE)}
+                className="px-16 py-6 bg-blue-600 rounded-3xl text-2xl font-black hover:bg-blue-500 transition-all shadow-2xl shadow-blue-600/40 hover:-translate-y-1 active:scale-95 uppercase tracking-widest"
+              >
+                Start Creating
+              </button>
+              {!user && (
+                <button 
+                  onClick={handleLogin}
+                  className="px-16 py-6 bg-white/5 border border-white/10 rounded-3xl text-2xl font-black hover:bg-white/10 transition-all uppercase tracking-widest"
+                >
+                  Sign In
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -253,9 +240,11 @@ const App: React.FC = () => {
           />
         )}
 
-        <div className={(appState === AppState.IDLE) ? "w-full flex justify-center py-6" : "hidden"}>
-          <GreetingCreator onGenerate={handleGenerate} />
-        </div>
+        {appState === AppState.IDLE && (
+          <div className="w-full flex justify-center py-6">
+            <GreetingCreator onGenerate={handleGenerate} />
+          </div>
+        )}
 
         {appState === AppState.LOADING && <LoadingIndicator />}
 
@@ -269,10 +258,7 @@ const App: React.FC = () => {
       </main>
 
       <footer className="py-10 text-center text-gray-800 text-xs border-t border-white/5 w-full">
-        <div className="flex flex-col items-center gap-2">
-          <p className="font-bold tracking-widest uppercase">&copy; {new Date().getFullYear()} eGreetz &bull; Production Core v2.1</p>
-          <p className="opacity-50">Enterprise Environment powered by Google Cloud & DeepMind GenAI.</p>
-        </div>
+        <p className="font-bold tracking-widest uppercase">&copy; {new Date().getFullYear()} eGreetz &bull; Production Core</p>
       </footer>
     </div>
   );

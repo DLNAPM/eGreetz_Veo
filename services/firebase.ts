@@ -1,15 +1,15 @@
 
-// Fix: Consolidating imports to resolve 'no exported member' errors which can occur in some TypeScript/build environments when value and type imports are separated.
-import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
+// Fix: Separating type and value imports to resolve "no exported member" errors in mixed environments
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import type { FirebaseApp } from 'firebase/app';
 import { 
   getAuth, 
   GoogleAuthProvider, 
   signInWithPopup, 
   signOut, 
-  onAuthStateChanged,
-  type User as FirebaseUser,
-  type Auth
+  onAuthStateChanged
 } from 'firebase/auth';
+import type { User as FirebaseUser, Auth } from 'firebase/auth';
 import { 
   getFirestore, 
   collection, 
@@ -19,13 +19,11 @@ import {
   getDocs, 
   deleteDoc, 
   doc, 
-  orderBy,
-  type Firestore
+  orderBy
 } from 'firebase/firestore';
+import type { Firestore } from 'firebase/firestore';
 import { GreetingRecord } from '../types';
 
-// The Firebase configuration for the egreetz-d0846 project.
-// Note: This is separate from the Gemini API Key.
 const firebaseConfig = {
   apiKey: "AIzaSyDUXkZHySvB2S1aiLBXK5nW5aD9GNBQT7g",
   authDomain: "egreetz-d0846.firebaseapp.com",
@@ -36,13 +34,12 @@ const firebaseConfig = {
   measurementId: "G-MRV9FYGGEQ"
 };
 
-// Safe initialization of Firebase app
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
 
 try {
-  // Use getApps and initializeApp from the consolidated modular imports
+  // Fix: Check if Firebase apps are already initialized to prevent duplicate initialization
   if (getApps().length === 0) {
     app = initializeApp(firebaseConfig);
   } else {
@@ -54,7 +51,7 @@ try {
     db = getFirestore(app);
   }
 } catch (error) {
-  console.error("Firebase Initialization Error:", error);
+  console.error("Firebase Initialization failed:", error);
 }
 
 const googleProvider = new GoogleAuthProvider();
@@ -62,26 +59,19 @@ const googleProvider = new GoogleAuthProvider();
 export const isFirebaseEnabled = () => !!app && !!auth && !!db;
 
 export const loginWithGoogle = async (): Promise<FirebaseUser> => {
-  if (!auth) throw new Error("Authentication service is not initialized.");
+  if (!auth) throw new Error("Authentication service unavailable.");
   try {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
   } catch (error: any) {
-    console.error("Firebase Login Error:", error.code, error.message);
-    if (error.code === 'auth/api-key-not-valid') {
-      throw new Error("The Firebase API key is invalid. Please check your project configuration.");
-    }
+    console.error("Login Error:", error);
     throw error;
   }
 };
 
 export const logout = async (): Promise<void> => {
   if (!auth) return;
-  try {
-    await signOut(auth);
-  } catch (error) {
-    console.error("Logout error:", error);
-  }
+  await signOut(auth);
 };
 
 export const onAuthStateChangedListener = (callback: (user: FirebaseUser | null) => void) => {
@@ -93,7 +83,7 @@ export const onAuthStateChangedListener = (callback: (user: FirebaseUser | null)
 };
 
 export const saveGreeting = async (userId: string, greeting: Omit<GreetingRecord, 'id'>) => {
-  if (!db) throw new Error("Firestore service is not initialized.");
+  if (!db) throw new Error("Database unavailable.");
   return await addDoc(collection(db, 'greetings'), {
     ...greeting,
     userId,
@@ -112,13 +102,13 @@ export const getUserGreetings = async (userId: string): Promise<GreetingRecord[]
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GreetingRecord));
   } catch (error) {
-    console.error("Failed to fetch greetings:", error);
+    console.error("Fetch greetings failed:", error);
     return [];
   }
 };
 
 export const deleteGreeting = async (greetingId: string): Promise<void> => {
-  if (!db) throw new Error("Firestore service is not initialized.");
+  if (!db) return;
   const docRef = doc(db, 'greetings', greetingId);
   await deleteDoc(docRef);
 };

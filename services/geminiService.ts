@@ -6,14 +6,20 @@ import {
 } from '@google/genai';
 import { GenerateGreetingParams, VoiceGender, VeoModel } from '../types';
 
+/**
+ * Generates a cinematic greeting video using Gemini Veo models.
+ */
 export const generateGreetingVideo = async (
   params: GenerateGreetingParams
 ): Promise<{ objectUrl: string; blob: Blob }> => {
-  // Use the API key provided in the environment. 
-  // GUIDELINE: Always use process.env.API_KEY directly in the constructor
+  // Always create a new instance to ensure we have the latest API key from state/env
+  // CRITICAL: Must use process.env.API_KEY directly when initializing the GoogleGenAI instance.
+  if (!process.env.API_KEY) {
+    throw new Error("API Key must be set. Please ensure you have selected an API key in the connection dialog.");
+  }
+  
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-  // If a photo is provided, we use the standard Veo model for reference-based generation
   const modelToUse = params.userPhoto ? 'veo-3.1-generate-preview' : params.model;
 
   const cinematicPrompt = `
@@ -24,7 +30,6 @@ export const generateGreetingVideo = async (
     Context: ${params.message.substring(0, 300)}
   `.trim();
 
-  // Veo constraints for reference images: 720p and 16:9 are recommended for preview models
   const config: any = {
     numberOfVideos: 1,
     resolution: '720p',
@@ -50,7 +55,6 @@ export const generateGreetingVideo = async (
   try {
     let operation = await ai.models.generateVideos(payload);
 
-    // Poll until completion with reassuring wait times
     while (!operation.done) {
       await new Promise((resolve) => setTimeout(resolve, 10000));
       operation = await ai.operations.getVideosOperation({ operation: operation });
@@ -58,7 +62,7 @@ export const generateGreetingVideo = async (
 
     const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
     if (downloadLink) {
-      // GUIDELINE: Use process.env.API_KEY directly when fetching video bytes
+      // CRITICAL: Append an API key when fetching from the download link.
       const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
       if (!response.ok) throw new Error('Failed to download the generated video file.');
       
@@ -66,15 +70,20 @@ export const generateGreetingVideo = async (
       return { objectUrl: URL.createObjectURL(blob), blob };
     }
   } catch (error: any) {
-    console.error("Gemini API Error details:", error);
+    console.error("Gemini API Error:", error);
     throw error;
   }
 
-  throw new Error('Video generation failed to return a valid operation response.');
+  throw new Error('Video generation failed to return a valid result.');
 };
 
+/**
+ * Generates audio for a greeting message using Gemini TTS.
+ */
 export const generateGreetingVoice = async (text: string, voice: VoiceGender): Promise<string | null> => {
-  // GUIDELINE: Always initialize GoogleGenAI with the API key from environment directly
+  // CRITICAL: Use process.env.API_KEY directly for initialization.
+  if (!process.env.API_KEY) return null;
+  
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const voiceMap: Record<VoiceGender, string> = {
@@ -98,7 +107,7 @@ export const generateGreetingVoice = async (text: string, voice: VoiceGender): P
     });
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    // Note: PCM audio requires manual decoding for browser playback as per guidelines.
+    // PCM audio requires specialized decoding as per guidelines; returning base64 for now.
     return base64Audio ? `data:audio/pcm;base64,${base64Audio}` : null;
   } catch (e) {
     console.error("Voice Generation failed:", e);
