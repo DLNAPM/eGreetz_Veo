@@ -1,17 +1,20 @@
 
-// Fix: Separated value imports from type imports to resolve module resolution errors in firebase/app.
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import type { FirebaseApp } from 'firebase/app';
-// Fix: Separated value imports from type imports for firebase/auth to resolve "no exported member" errors.
+// Consolidated Firebase imports to resolve module member resolution errors for initializeApp, getAuth, etc.
+import { 
+  initializeApp, 
+  getApps, 
+  getApp, 
+  type FirebaseApp 
+} from 'firebase/app';
 import { 
   getAuth, 
   GoogleAuthProvider, 
   signInWithPopup, 
   signOut, 
-  onAuthStateChanged
+  onAuthStateChanged,
+  type User as FirebaseUser,
+  type Auth 
 } from 'firebase/auth';
-import type { User as FirebaseUser, Auth } from 'firebase/auth';
-// Fix: Separated value imports from type imports for firebase/firestore.
 import { 
   getFirestore, 
   collection, 
@@ -21,45 +24,38 @@ import {
   getDocs, 
   deleteDoc, 
   doc, 
-  orderBy
+  orderBy,
+  setDoc,
+  serverTimestamp,
+  type Firestore
 } from 'firebase/firestore';
-import type { Firestore } from 'firebase/firestore';
+import { 
+  getStorage, 
+  ref, 
+  uploadBytes, 
+  getDownloadURL,
+  type FirebaseStorage
+} from 'firebase/storage';
 import { GreetingRecord } from '../types';
 
-/**
- * Safely accesses environment variables.
- * In Vite, these are usually on import.meta.env, but we use process.env mapping
- * via vite.config.js for maximum compatibility with Render.com.
- */
 const getEnvVar = (key: string): string | undefined => {
-  // Check process.env first (defined in vite.config.js)
   if (typeof process !== 'undefined' && process.env && process.env[key]) {
     return process.env[key];
   }
-  // Fallback to import.meta.env with safety check
   try {
     const metaEnv = (import.meta as any).env;
-    if (metaEnv && metaEnv[key]) {
-      return metaEnv[key];
-    }
-  } catch (e) {
-    // import.meta.env might not be available in all contexts
-  }
+    if (metaEnv && metaEnv[key]) return metaEnv[key];
+  } catch (e) {}
   return undefined;
 };
 
 const getFirebaseConfig = () => {
-  // Option 1: Load from a single JSON string
   const configStr = getEnvVar('VITE_FIREBASE_CONFIG');
   if (configStr) {
     try {
       return JSON.parse(configStr);
-    } catch (e) {
-      console.error("Failed to parse VITE_FIREBASE_CONFIG environment variable:", e);
-    }
+    } catch (e) {}
   }
-  
-  // Option 2: Load from individual environment variables
   return {
     apiKey: getEnvVar('VITE_FIREBASE_API_KEY'),
     authDomain: getEnvVar('VITE_FIREBASE_AUTH_DOMAIN'),
@@ -76,8 +72,8 @@ const firebaseConfig = getFirebaseConfig();
 let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
+let storage: FirebaseStorage | null = null;
 
-// Only initialize if we have at least an API key present
 if (firebaseConfig && firebaseConfig.apiKey) {
   try {
     if (getApps().length === 0) {
@@ -89,6 +85,7 @@ if (firebaseConfig && firebaseConfig.apiKey) {
     if (app) {
       auth = getAuth(app);
       db = getFirestore(app);
+      storage = getStorage(app);
     }
   } catch (error) {
     console.error("Firebase Initialization failed:", error);
@@ -97,19 +94,12 @@ if (firebaseConfig && firebaseConfig.apiKey) {
 
 const googleProvider = new GoogleAuthProvider();
 
-export const isFirebaseEnabled = () => !!app && !!auth && !!db;
+export const isFirebaseEnabled = () => !!app && !!auth && !!db && !!storage;
 
 export const loginWithGoogle = async (): Promise<FirebaseUser> => {
-  if (!auth) {
-    throw new Error("Authentication service unavailable. Please ensure VITE_FIREBASE_... environment variables are set in your Render dashboard.");
-  }
-  try {
-    const result = await signInWithPopup(auth, googleProvider);
-    return result.user;
-  } catch (error: any) {
-    console.error("Login Error:", error);
-    throw error;
-  }
+  if (!auth) throw new Error("Authentication service unavailable.");
+  const result = await signInWithPopup(auth, googleProvider);
+  return result.user;
 };
 
 export const logout = async (): Promise<void> => {
@@ -123,6 +113,17 @@ export const onAuthStateChangedListener = (callback: (user: FirebaseUser | null)
     return () => {};
   }
   return onAuthStateChanged(auth, callback);
+};
+
+/**
+ * Uploads a video blob to Firebase Storage and returns a permanent URL.
+ */
+export const uploadVideoToCloud = async (blob: Blob, userId: string): Promise<string> => {
+  if (!storage) throw new Error("Cloud Storage unavailable.");
+  const fileName = `greetings/${userId}/${Date.now()}.mp4`;
+  const storageRef = ref(storage, fileName);
+  await uploadBytes(storageRef, blob);
+  return await getDownloadURL(storageRef);
 };
 
 export const saveGreeting = async (userId: string, greeting: Omit<GreetingRecord, 'id'>) => {
@@ -150,6 +151,48 @@ export const getUserGreetings = async (userId: string): Promise<GreetingRecord[]
   }
 };
 
+/**
+ * Internal Share: Sends a greeting to another user's email.
+ */
+export const sendToInternalUser = async (senderName: string, recipientEmail: string, greeting: GreetingRecord) => {
+  if (!db) throw new Error("Database unavailable.");
+  const shareRef = collection(db, 'shared_greetings');
+  await addDoc(shareRef, {
+    recipientEmail: recipientEmail.toLowerCase(),
+    senderName,
+    greetingId: greeting.id,
+    videoUrl: greeting.videoUrl,
+    occasion: greeting.occasion,
+    message: greeting.message,
+    theme: greeting.theme,
+    sharedAt: serverTimestamp(),
+    createdAt: greeting.createdAt
+  });
+};
+
+/**
+ * Fetches greetings shared with the current user.
+ */
+export const getReceivedGreetings = async (email: string): Promise<GreetingRecord[]> => {
+  if (!db) return [];
+  try {
+    const q = query(
+      collection(db, 'shared_greetings'),
+      where('recipientEmail', '==', email.toLowerCase()),
+      orderBy('sharedAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ 
+      id: doc.id, 
+      ...doc.data(),
+      isReceived: true // Flag to identify shared content in UI
+    } as any));
+  } catch (error) {
+    console.error("Fetch shared failed:", error);
+    return [];
+  }
+};
+
 export const deleteGreeting = async (greetingId: string): Promise<void> => {
   if (!db) return;
   const docRef = doc(db, 'greetings', greetingId);
@@ -157,4 +200,4 @@ export const deleteGreeting = async (greetingId: string): Promise<void> => {
 };
 
 export type { FirebaseUser as User };
-export { auth, db };
+export { auth, db, storage };

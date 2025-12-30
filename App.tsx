@@ -1,6 +1,18 @@
 
 import React, { useState, useEffect } from 'react';
-import { loginWithGoogle, logout, getUserGreetings, saveGreeting, deleteGreeting, isFirebaseEnabled, onAuthStateChangedListener, type User } from './services/firebase';
+import { 
+  loginWithGoogle, 
+  logout, 
+  getUserGreetings, 
+  saveGreeting, 
+  deleteGreeting, 
+  isFirebaseEnabled, 
+  onAuthStateChangedListener,
+  uploadVideoToCloud,
+  getReceivedGreetings,
+  sendToInternalUser,
+  type User 
+} from './services/firebase';
 import { AppState, GenerateGreetingParams, GreetingRecord, VeoModel, AspectRatio, VoiceGender } from './types';
 import GreetingCreator from './components/GreetingCreator';
 import GreetingGallery from './components/GreetingGallery';
@@ -13,8 +25,9 @@ import { generateGreetingVideo } from './services/geminiService';
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [appState, setAppState] = useState<AppState>(AppState.AUTH);
-  const [greetings, setGreetings] = useState<GreetingRecord[]>([]);
-  const [currentResult, setCurrentResult] = useState<{ url: string; params: GenerateGreetingParams } | null>(null);
+  const [myGreetings, setMyGreetings] = useState<GreetingRecord[]>([]);
+  const [receivedGreetings, setReceivedGreetings] = useState<GreetingRecord[]>([]);
+  const [currentResult, setCurrentResult] = useState<{ url: string; params: GenerateGreetingParams; record?: GreetingRecord } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
   const [isKeyConnected, setIsKeyConnected] = useState(false);
@@ -38,7 +51,7 @@ const App: React.FC = () => {
     const unsubscribe = onAuthStateChangedListener((u) => {
       setUser(u);
       if (u) {
-        loadGreetings(u.uid);
+        loadData(u);
         if (appState === AppState.AUTH) {
           setAppState(AppState.GALLERY);
         }
@@ -52,27 +65,13 @@ const App: React.FC = () => {
     };
   }, [appState]);
 
-  const loadGreetings = async (uid: string) => {
-    const data = await getUserGreetings(uid);
-    setGreetings(data);
-  };
-
-  const handleLogin = async () => {
-    try {
-      await loginWithGoogle();
-    } catch (err: any) {
-      console.error("Login Error:", err);
-      alert("Login failed.");
-    }
-  };
-
-  // Fix: Optimized key selection handling for Veo models, assuming success after triggering openSelectKey.
-  const handleConnectKey = async () => {
-    if (window.aistudio) {
-      await window.aistudio.openSelectKey();
-      setIsKeyConnected(true);
-      setShowApiKeyDialog(false);
-    }
+  const loadData = async (u: User) => {
+    const [mine, received] = await Promise.all([
+      getUserGreetings(u.uid),
+      u.email ? getReceivedGreetings(u.email) : Promise.resolve([])
+    ]);
+    setMyGreetings(mine);
+    setReceivedGreetings(received);
   };
 
   const handleGenerate = async (params: GenerateGreetingParams & { extended: boolean }) => {
@@ -88,36 +87,48 @@ const App: React.FC = () => {
     setAppState(AppState.LOADING);
     
     try {
-      // Pass the extended flag to the service for 15s videos
-      const { objectUrl } = await generateGreetingVideo(params);
+      const { blob } = await generateGreetingVideo(params);
       
+      let finalUrl = "";
+      let newRecord: GreetingRecord | undefined;
+
       if (user && isFirebaseReady) {
-        try {
-          await saveGreeting(user.uid, {
-            userId: user.uid,
-            occasion: params.occasion,
-            message: params.message,
-            theme: params.theme,
-            videoUrl: objectUrl,
-            createdAt: Date.now()
-          });
-          loadGreetings(user.uid);
-        } catch (saveError) {
-          console.error("Cloud storage sync failed:", saveError);
-        }
+        // Step 1: Upload to Cloud Storage to get a permanent shareable URL
+        finalUrl = await uploadVideoToCloud(blob, user.uid);
+
+        // Step 2: Save metadata to Firestore
+        const docRef = await saveGreeting(user.uid, {
+          userId: user.uid,
+          occasion: params.occasion,
+          message: params.message,
+          theme: params.theme,
+          videoUrl: finalUrl,
+          createdAt: Date.now()
+        });
+
+        newRecord = {
+          id: docRef.id,
+          userId: user.uid,
+          occasion: params.occasion,
+          message: params.message,
+          theme: params.theme,
+          videoUrl: finalUrl,
+          createdAt: Date.now()
+        };
+
+        loadData(user);
+      } else {
+        // Fallback for non-logged in or firebase error
+        finalUrl = URL.createObjectURL(blob);
       }
 
-      setCurrentResult({ url: objectUrl, params });
+      setCurrentResult({ url: finalUrl, params, record: newRecord });
       setAppState(AppState.SUCCESS);
     } catch (e: any) {
       console.error("Video Generation Error:", e);
-      // Fix: Adhering to Gemini rules for "Requested entity was not found" error by resetting state and prompting for key.
       if (e.message?.includes("Requested entity was not found")) {
         setIsKeyConnected(false);
-        if (window.aistudio) {
-          await window.aistudio.openSelectKey();
-          setIsKeyConnected(true);
-        }
+        if (window.aistudio) await window.aistudio.openSelectKey();
       }
       alert("Generation Error: " + e.toString());
       setAppState(AppState.IDLE);
@@ -130,7 +141,7 @@ const App: React.FC = () => {
     if (window.confirm("Permanently delete this cinematic greeting?")) {
       try {
         await deleteGreeting(id);
-        if (user) loadGreetings(user.uid);
+        if (user) loadData(user);
       } catch (error) {
         console.error("Deletion failed:", error);
       }
@@ -138,9 +149,9 @@ const App: React.FC = () => {
   };
 
   const handleSelectGreeting = (greeting: GreetingRecord) => {
-    // Populate the viewer with existing greeting data
     setCurrentResult({
       url: greeting.videoUrl,
+      record: greeting,
       params: {
         occasion: greeting.occasion,
         message: greeting.message,
@@ -154,30 +165,40 @@ const App: React.FC = () => {
     setAppState(AppState.SUCCESS);
   };
 
-  const handleCancelCreator = () => {
-    setAppState(user ? AppState.GALLERY : AppState.AUTH);
+  const handleInternalShare = async (email: string) => {
+    if (!currentResult?.record || !user) return;
+    try {
+      await sendToInternalUser(user.displayName || "A Friend", email, currentResult.record);
+      alert("Cinematic greeting sent to " + email);
+    } catch (err: any) {
+      alert("Share failed: " + err.message);
+    }
   };
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col font-sans selection:bg-blue-600/30">
-      {showApiKeyDialog && <ApiKeyDialog onContinue={handleConnectKey} />}
+      {showApiKeyDialog && <ApiKeyDialog onContinue={() => {
+        if (window.aistudio) {
+          window.aistudio.openSelectKey();
+          setIsKeyConnected(true);
+          setShowApiKeyDialog(false);
+        }
+      }} />}
       
       <header className="px-6 py-5 flex justify-between items-center border-b border-white/5 bg-black/95 backdrop-blur-xl sticky top-0 z-50">
         <div 
           className="flex items-center gap-2 cursor-pointer group" 
           onClick={() => setAppState(user ? AppState.GALLERY : AppState.AUTH)}
         >
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-bold text-xl shadow-[0_0_20px_rgba(37,99,235,0.4)] group-hover:scale-105 transition-transform">
+          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-bold text-xl shadow-[0_0_20px_rgba(37,99,235,0.4)] group-hover:scale-105 transition-transform text-white">
             eG
           </div>
           <div className="flex flex-col">
-            <h1 className="text-2xl font-black tracking-tight text-white leading-none">
-              eGreetz
-            </h1>
+            <h1 className="text-2xl font-black tracking-tight text-white leading-none">eGreetz</h1>
             <div className="flex items-center gap-1.5 mt-1.5">
               <span className={`flex h-2 w-2 rounded-full ${isKeyConnected ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`}></span>
               <span className="text-[10px] text-gray-400 font-black tracking-widest uppercase">
-                {isKeyConnected ? 'Ready for Production' : 'Key Required'}
+                {isKeyConnected ? 'Studio Ready' : 'Connect Key'}
               </span>
             </div>
           </div>
@@ -188,7 +209,7 @@ const App: React.FC = () => {
             <>
               <button 
                 onClick={() => setAppState(AppState.IDLE)}
-                className="flex items-center gap-2 px-6 py-2 bg-blue-600 rounded-full hover:bg-blue-500 transition-all font-bold text-sm"
+                className="flex items-center gap-2 px-6 py-2 bg-blue-600 rounded-full hover:bg-blue-500 transition-all font-bold text-sm text-white"
               >
                 <Plus size={16} strokeWidth={3} /> New Script
               </button>
@@ -198,7 +219,7 @@ const App: React.FC = () => {
             </>
           ) : (
             <button 
-              onClick={handleLogin}
+              onClick={loginWithGoogle}
               className="flex items-center gap-2 px-7 py-2.5 bg-white text-black font-black rounded-full hover:bg-gray-200 transition-all text-sm uppercase tracking-wider"
             >
               <LogIn size={16} strokeWidth={3} /> Login
@@ -209,30 +230,29 @@ const App: React.FC = () => {
 
       <main className="flex-grow flex flex-col items-center p-6 w-full max-w-6xl mx-auto">
         {!isFirebaseReady && (
-          <div className="w-full max-w-4xl mb-6 p-4 bg-blue-900/10 border border-blue-500/20 rounded-2xl flex items-center gap-3 text-blue-200 text-sm">
-            <AlertCircle size={20} className="text-blue-400" />
-            <span>Local Mode: Your greetings will not be saved after page reload.</span>
+          <div className="w-full max-w-4xl mb-6 p-4 bg-red-900/10 border border-red-500/20 rounded-2xl flex items-center gap-3 text-red-200 text-sm">
+            <AlertCircle size={20} className="text-red-400" />
+            <span>Cloud Services Disconnected. Sharing will not work. Check VITE_FIREBASE_CONFIG.</span>
           </div>
         )}
 
         {appState === AppState.AUTH && (
           <div className="flex-grow flex flex-col items-center justify-center text-center max-w-3xl animate-in fade-in zoom-in duration-1000">
             <h2 className="text-7xl font-black mb-8 leading-[1] text-white tracking-tighter">Cinematic <span className="text-blue-600">Reimagined.</span></h2>
-            <p className="text-2xl text-gray-500 mb-12 leading-relaxed font-medium">Create Hollywood-grade video greetings with automated speed-fit AI voices.</p>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <button 
-                onClick={() => setAppState(AppState.IDLE)}
-                className="px-16 py-6 bg-blue-600 rounded-3xl text-2xl font-black hover:bg-blue-500 transition-all shadow-2xl shadow-blue-600/40 uppercase tracking-widest"
-              >
-                Start Creating
-              </button>
-            </div>
+            <p className="text-2xl text-gray-400 mb-12 leading-relaxed font-medium">Create and host Hollywood-grade video greetings. Permanent cloud links ready for sharing.</p>
+            <button 
+              onClick={() => setAppState(AppState.IDLE)}
+              className="px-16 py-6 bg-blue-600 rounded-3xl text-2xl font-black hover:bg-blue-500 transition-all shadow-2xl shadow-blue-600/40 uppercase tracking-widest text-white"
+            >
+              Start Creating
+            </button>
           </div>
         )}
 
         {appState === AppState.GALLERY && user && (
           <GreetingGallery 
-            greetings={greetings} 
+            greetings={myGreetings} 
+            receivedGreetings={receivedGreetings}
             onDelete={handleDelete} 
             onSelect={handleSelectGreeting}
             onCreateNew={() => setAppState(AppState.IDLE)}
@@ -241,7 +261,7 @@ const App: React.FC = () => {
 
         {appState === AppState.IDLE && (
           <div className="w-full flex justify-center py-6">
-            <GreetingCreator onGenerate={handleGenerate} onCancel={handleCancelCreator} />
+            <GreetingCreator onGenerate={handleGenerate} onCancel={() => setAppState(user ? AppState.GALLERY : AppState.AUTH)} />
           </div>
         )}
 
@@ -252,6 +272,7 @@ const App: React.FC = () => {
             result={currentResult} 
             onRestart={() => setAppState(AppState.IDLE)} 
             onGoGallery={() => setAppState(user ? AppState.GALLERY : AppState.IDLE)}
+            onInternalShare={handleInternalShare}
           />
         )}
       </main>
