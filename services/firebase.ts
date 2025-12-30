@@ -1,11 +1,8 @@
 
-// Fix: Split type and value imports from Firebase modular SDK to resolve resolution errors common in mixed import scenarios.
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import type { FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import type { Auth, User } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, orderBy } from 'firebase/firestore';
-import type { Firestore } from 'firebase/firestore';
+// Consolidated type and value imports from Firebase modular SDK to resolve resolution errors where exported members were not being recognized.
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, type Auth, type User } from 'firebase/auth';
+import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, orderBy, type Firestore } from 'firebase/firestore';
 import { GreetingRecord } from '../types';
 
 // Provided Production Firebase configuration

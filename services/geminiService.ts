@@ -10,7 +10,12 @@ export const generateGreetingVideo = async (
   params: GenerateGreetingParams
 ): Promise<{ objectUrl: string; blob: Blob }> => {
   // GUIDELINE: Always use new GoogleGenAI({apiKey: process.env.API_KEY}) directly before making an API call.
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error("No API Key found. Please click 'Connect Cloud Billing' or select a key when prompted.");
+  }
+  
+  const ai = new GoogleGenAI({ apiKey });
 
   // If a photo is provided, we use the standard Veo model for reference-based generation
   const modelToUse = params.userPhoto ? 'veo-3.1-generate-preview' : params.model;
@@ -74,8 +79,11 @@ export const generateGreetingVideo = async (
 
 export const generateGreetingVoice = async (text: string, voice: VoiceGender): Promise<string | null> => {
   try {
-    // GUIDELINE: Create new instance right before making an API call to ensure it uses the most up-to-date API key.
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) return null;
+
+    // GUIDELINE: Create new instance right before making an API call
+    const ai = new GoogleGenAI({ apiKey });
     
     const voiceMap: Record<VoiceGender, string> = {
       [VoiceGender.MALE_TENOR]: 'Kore',
@@ -87,7 +95,6 @@ export const generateGreetingVoice = async (text: string, voice: VoiceGender): P
       model: "gemini-2.5-flash-preview-tts",
       contents: [{ parts: [{ text: `Say this greeting message warmly: ${text}` }] }],
       config: {
-        // GUIDELINE: responseModalities must be an array with a single Modality.AUDIO element.
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
@@ -98,7 +105,6 @@ export const generateGreetingVoice = async (text: string, voice: VoiceGender): P
     });
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    // Note: The audio returned by the API is raw PCM data.
     return base64Audio ? `data:audio/pcm;base64,${base64Audio}` : null;
   } catch (e) {
     console.error("Production Voice Synth Cluster failed:", e);

@@ -7,7 +7,7 @@ import GreetingGallery from './components/GreetingGallery';
 import GreetingResult from './components/GreetingResult';
 import LoadingIndicator from './components/LoadingIndicator';
 import ApiKeyDialog from './components/ApiKeyDialog';
-import { LogIn, LogOut, Plus, ShieldCheck, AlertCircle, Cpu } from 'lucide-react';
+import { LogIn, LogOut, Plus, ShieldCheck, AlertCircle, Cpu, Key } from 'lucide-react';
 import { generateGreetingVideo } from './services/geminiService';
 
 const App: React.FC = () => {
@@ -17,9 +17,18 @@ const App: React.FC = () => {
   const [currentResult, setCurrentResult] = useState<{ url: string; params: GenerateGreetingParams } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
+  const [isKeyConnected, setIsKeyConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'error' | 'none'>('none');
 
   useEffect(() => {
+    const checkKeyStatus = async () => {
+      if (window.aistudio) {
+        const hasKey = await window.aistudio.hasSelectedApiKey();
+        setIsKeyConnected(hasKey);
+      }
+    };
+    
+    checkKeyStatus();
     if (isFirebaseEnabled()) {
       setConnectionStatus('connected');
     } else {
@@ -44,8 +53,15 @@ const App: React.FC = () => {
     setGreetings(data);
   };
 
+  const handleConnectKey = async () => {
+    if (window.aistudio) {
+      await window.aistudio.openSelectKey();
+      setIsKeyConnected(true); // GUIDELINE: Assume success after triggering
+    }
+  };
+
   const handleGenerate = async (params: GenerateGreetingParams) => {
-    // GUIDELINE: For Veo models, check for API key selection
+    // GUIDELINE: Veo models MANDATORY key selection check
     if (window.aistudio) {
       const hasKey = await window.aistudio.hasSelectedApiKey();
       if (!hasKey) {
@@ -82,7 +98,8 @@ const App: React.FC = () => {
       console.error("Video Generation Error:", e);
       
       const errorMessage = e.toString() || "An unexpected error occurred.";
-      // GUIDELINE: Handle "Requested entity was not found" and other key issues by prompting re-selection
+      
+      // GUIDELINE: Handle "Requested entity was not found" or general API Key issues
       const isApiKeyError = 
         errorMessage.toLowerCase().includes("api key") || 
         errorMessage.includes("Requested entity was not found") ||
@@ -90,11 +107,12 @@ const App: React.FC = () => {
         errorMessage.includes("API Key is required");
 
       if (isApiKeyError && window.aistudio) {
-        // Reset and prompt
+        // GUIDELINE: If request fails with "Requested entity was not found", reset and prompt selection again
+        setIsKeyConnected(false);
         await window.aistudio.openSelectKey();
-        // GUIDELINE: Assume success after trigger and let user try again
+        setIsKeyConnected(true); // Proceed assuming user is selecting a key
       } else if (isApiKeyError) {
-        alert("API Authentication Required: Veo models require a paid API key from Google Cloud. Please ensure your environment is configured.");
+        alert("Authentication Required: This high-quality video model requires a paid Google Cloud project. Please configure your API_KEY environment variable.");
       } else {
         alert("Generation Interrupted: " + errorMessage);
       }
@@ -118,7 +136,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#000000] text-white flex flex-col font-sans selection:bg-blue-600/30">
-      {showApiKeyDialog && <ApiKeyDialog onContinue={() => { setShowApiKeyDialog(false); window.aistudio?.openSelectKey(); }} />}
+      {showApiKeyDialog && <ApiKeyDialog onContinue={() => { setShowApiKeyDialog(false); handleConnectKey(); }} />}
       
       <header className="px-6 py-5 flex justify-between items-center border-b border-white/5 bg-black/95 backdrop-blur-xl sticky top-0 z-50">
         <div 
@@ -133,15 +151,24 @@ const App: React.FC = () => {
               eGreetz
             </h1>
             <div className="flex items-center gap-1.5 mt-1.5">
-              <span className="flex h-2 w-2 rounded-full bg-blue-500 animate-pulse"></span>
-              <span className="text-[10px] text-blue-400 font-black tracking-widest uppercase flex items-center gap-1">
-                Production Cluster
+              <span className={`flex h-2 w-2 rounded-full ${isKeyConnected ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`}></span>
+              <span className="text-[10px] text-gray-400 font-black tracking-widest uppercase flex items-center gap-1">
+                {isKeyConnected ? 'Google Cloud Linked' : 'Key Selection Required'}
               </span>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
+          {!isKeyConnected && window.aistudio && (
+            <button 
+              onClick={handleConnectKey}
+              className="hidden md:flex items-center gap-2 px-4 py-2 border border-blue-500/30 bg-blue-500/10 text-blue-400 rounded-full hover:bg-blue-500 hover:text-white transition-all font-bold text-xs uppercase tracking-wider"
+            >
+              <Key size={14} /> Connect Cloud Billing
+            </button>
+          )}
+
           {user ? (
             <>
               <button 
@@ -152,10 +179,9 @@ const App: React.FC = () => {
               </button>
               <button 
                 onClick={logout}
-                className="p-2 text-gray-500 hover:text-white transition-colors flex items-center gap-2 group"
+                className="p-2 text-gray-500 hover:text-white transition-colors"
                 title="Sign Out"
               >
-                <span className="text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity">Sign Out</span>
                 <LogOut size={20} />
               </button>
             </>
@@ -206,11 +232,6 @@ const App: React.FC = () => {
             >
               {isFirebaseEnabled() ? 'Access Secure Portal' : 'Initialize Creator'}
             </button>
-            <div className="mt-16 flex gap-12 grayscale opacity-30 hover:grayscale-0 hover:opacity-100 transition-all duration-700">
-              <div className="flex items-center gap-2 font-black text-xl tracking-tighter italic">VEO 3.1</div>
-              <div className="flex items-center gap-2 font-black text-xl tracking-tighter italic">GEMINI 2.5</div>
-              <div className="flex items-center gap-2 font-black text-xl tracking-tighter italic">FIREBASE</div>
-            </div>
           </div>
         )}
 
