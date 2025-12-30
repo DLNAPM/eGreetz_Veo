@@ -1,0 +1,99 @@
+import {Video} from '@google/genai';
+
+export enum AppState {
+  IDLE,
+  AUTH,
+  LOADING,
+  SUCCESS,
+  ERROR,
+  GALLERY
+}
+
+export enum Occasion {
+  BIRTHDAY = 'Happy Birthday',
+  CHRISTMAS = 'Merry Christmas',
+  ANNIVERSARY = 'Happy Anniversary',
+  NEW_YEARS = 'Happy New Years',
+  PROMOTION = 'Congratulations on your Promotion',
+  GRADUATION = 'Congratulations on your Graduation'
+}
+
+export enum GreetingTheme {
+  BALLOONS = 'Balloons dropping',
+  CHAMPAGNE = 'Champagne popping',
+  FIREWORKS = 'Fireworks',
+  NOISE_MAKERS = 'Noise makers'
+}
+
+export enum VoiceGender {
+  MALE_TENOR = 'Male (Tenor)',
+  MALE_BASS = 'Male (Bass)',
+  FEMALE = 'Female'
+}
+
+export enum VeoModel {
+  VEO_FAST = 'veo-3.1-fast-generate-preview',
+  VEO = 'veo-3.1-generate-preview',
+}
+
+export enum AspectRatio {
+  LANDSCAPE = '16:9',
+  PORTRAIT = '9:16',
+}
+
+export enum Resolution {
+  P720 = '720p',
+  P1080 = '1080p',
+}
+
+export enum GenerationMode {
+  TEXT_TO_VIDEO = 'Text to Video',
+  FRAMES_TO_VIDEO = 'Frames to Video',
+  REFERENCES_TO_VIDEO = 'References to Video',
+  EXTEND_VIDEO = 'Extend Video',
+}
+
+export interface ImageFile {
+  file: File;
+  base64: string;
+}
+
+export interface VideoFile {
+  file: File;
+  base64: string;
+}
+
+export interface GreetingRecord {
+  id: string;
+  userId: string;
+  occasion: Occasion;
+  message: string;
+  theme: GreetingTheme;
+  videoUrl: string;
+  createdAt: number;
+}
+
+export interface GenerateGreetingParams {
+  occasion: Occasion;
+  message: string;
+  theme: GreetingTheme;
+  voice: VoiceGender;
+  userPhoto: ImageFile | null;
+  model: VeoModel;
+  aspectRatio: AspectRatio;
+}
+
+export interface GenerateVideoParams {
+  prompt: string;
+  model: VeoModel;
+  aspectRatio: AspectRatio;
+  resolution: Resolution;
+  mode: GenerationMode;
+  startFrame: ImageFile | null;
+  endFrame: ImageFile | null;
+  referenceImages: ImageFile[];
+  styleImage: ImageFile | null;
+  inputVideo: VideoFile | null;
+  inputVideoObject: Video | null;
+  isLooping: boolean;
+}

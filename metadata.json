@@ -1,0 +1,8 @@
+{
+  "name": "eGreetz",
+  "description": "Create stunning cinematic video greetings with personalized voice and visuals.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "prompt": "Create a high-quality cinematic video greeting for a special occasion."
+}
