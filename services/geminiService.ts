@@ -1,3 +1,4 @@
+
 import {
   GoogleGenAI,
   Modality,
@@ -8,7 +9,7 @@ import { GenerateGreetingParams, VoiceGender, VeoModel } from '../types';
 export const generateGreetingVideo = async (
   params: GenerateGreetingParams
 ): Promise<{ objectUrl: string; blob: Blob }> => {
-  // Always create a new instance right before the call to pick up the latest API key injected in AI Studio
+  // GUIDELINE: Always use new GoogleGenAI({apiKey: process.env.API_KEY}) directly before making an API call.
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   // If a photo is provided, we use the standard Veo model for reference-based generation
@@ -19,7 +20,7 @@ export const generateGreetingVideo = async (
     Visual Theme: ${params.theme}. 
     Atmosphere: Joyful, celebratory, professional cinematic lighting, 8k resolution feel.
     The video should be visually stunning.
-    Context: ${params.message.substring(0, 300)}
+    Message context: ${params.message.substring(0, 500)}
   `.trim();
 
   // Veo constraints for reference images: 720p and 16:9 are recommended for preview models
@@ -48,7 +49,7 @@ export const generateGreetingVideo = async (
   try {
     let operation = await ai.models.generateVideos(payload);
 
-    // Poll until completion with reassuring wait times
+    // Poll until completion
     while (!operation.done) {
       await new Promise((resolve) => setTimeout(resolve, 10000));
       operation = await ai.operations.getVideosOperation({ operation: operation });
@@ -56,35 +57,37 @@ export const generateGreetingVideo = async (
 
     const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
     if (downloadLink) {
-      // GUIDELINE: The response.body contains the MP4 bytes. You must append an API key when fetching.
+      // GUIDELINE: The response.body contains the MP4 bytes. You must append an API key when fetching from the download link.
       const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
-      if (!response.ok) throw new Error('Failed to download the generated video file.');
+      if (!response.ok) throw new Error('Secure download failed. Project billing might be restricted.');
       
       const blob = await response.blob();
       return { objectUrl: URL.createObjectURL(blob), blob };
     }
   } catch (error: any) {
-    console.error("Gemini API Error details:", error);
+    console.error("Gemini Production Cluster Error:", error);
     throw error;
   }
 
-  throw new Error('Video generation failed to return a valid operation response.');
+  throw new Error('Video processing failed to produce a valid sequence.');
 };
 
 export const generateGreetingVoice = async (text: string, voice: VoiceGender): Promise<string | null> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
-  const voiceMap: Record<VoiceGender, string> = {
-    [VoiceGender.MALE_TENOR]: 'Kore',
-    [VoiceGender.MALE_BASS]: 'Puck',
-    [VoiceGender.FEMALE]: 'Charon'
-  };
-
   try {
+    // GUIDELINE: Create new instance right before making an API call to ensure it uses the most up-to-date API key.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    const voiceMap: Record<VoiceGender, string> = {
+      [VoiceGender.MALE_TENOR]: 'Kore',
+      [VoiceGender.MALE_BASS]: 'Puck',
+      [VoiceGender.FEMALE]: 'Charon'
+    };
+
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
       contents: [{ parts: [{ text: `Say this greeting message warmly: ${text}` }] }],
       config: {
+        // GUIDELINE: responseModalities must be an array with a single Modality.AUDIO element.
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
@@ -95,10 +98,10 @@ export const generateGreetingVoice = async (text: string, voice: VoiceGender): P
     });
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    // Returns data URI for raw PCM base64
+    // Note: The audio returned by the API is raw PCM data.
     return base64Audio ? `data:audio/pcm;base64,${base64Audio}` : null;
   } catch (e) {
-    console.error("Voice Generation failed:", e);
+    console.error("Production Voice Synth Cluster failed:", e);
     return null;
   }
 };
