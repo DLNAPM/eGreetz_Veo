@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import type { User } from 'firebase/auth';
+// Fix: Use inline type import to ensure compatibility with ESM resolution in varied environments
+import { type User } from 'firebase/auth';
 import { auth, loginWithGoogle, logout, getUserGreetings, saveGreeting, deleteGreeting, isFirebaseEnabled, onAuthStateChangedListener } from './services/firebase';
 import { AppState, GenerateGreetingParams, GreetingRecord, Occasion, GreetingTheme, VoiceGender, VeoModel, AspectRatio } from './types';
 import GreetingCreator from './components/GreetingCreator';
@@ -27,14 +28,14 @@ const App: React.FC = () => {
       return;
     }
 
-    // Fix: Use the modular listener wrapper instead of the deprecated instance method
     const unsubscribe = onAuthStateChangedListener(async (u) => {
+      const isInitialLoad = user === null;
       setUser(u);
       
       if (u) {
         loadGreetings(u.uid);
-        // Only auto-redirect to gallery if we are on the Auth landing page
-        // This prevents the "reset" bug when the user is already in the middle of a flow
+        // CRITICAL FIX: Only change state to GALLERY if we are currently at the AUTH landing screen.
+        // This prevents the app from "starting over" when the auth state listener triggers during other activities.
         setAppState(prev => {
           if (prev === AppState.AUTH) return AppState.GALLERY;
           return prev;
@@ -61,6 +62,18 @@ const App: React.FC = () => {
       }
     }
 
+    // Safety check for API Key before calling the SDK to avoid vague browser errors
+    if (!process.env.API_KEY) {
+      console.warn("API Key is missing from process.env.API_KEY");
+      if (window.aistudio) {
+        await window.aistudio.openSelectKey();
+        return;
+      } else {
+        alert("API Key is missing. Please ensure your environment is configured correctly.");
+        return;
+      }
+    }
+
     setIsLoading(true);
     setAppState(AppState.LOADING);
     
@@ -80,7 +93,7 @@ const App: React.FC = () => {
           });
           loadGreetings(user.uid);
         } catch (saveError) {
-          console.error("Cloud save failed, but video was generated:", saveError);
+          console.error("Cloud save failed, but video was generated successfully:", saveError);
         }
       }
 
@@ -89,16 +102,19 @@ const App: React.FC = () => {
     } catch (e: any) {
       console.error("Video Generation Error:", e);
       
-      // Handle missing entity error by prompting for key again
-      if (e.message?.includes("Requested entity was not found")) {
+      // Handle missing entity error by prompting for key again as per guidelines
+      if (e.message?.includes("Requested entity was not found") || e.message?.includes("API Key must be set")) {
         if (window.aistudio) {
           await window.aistudio.openSelectKey();
+          // After opening the dialog, we stay in IDLE so they can try again once key is picked
+        } else {
+          alert(`Configuration Error: ${e.message}`);
         }
       } else {
-        alert("Failed to generate video: " + (e.message || "Unknown error"));
+        alert("Failed to generate greeting: " + (e.message || "Unknown error occurred."));
       }
       
-      // Return to creator on error
+      // On error, return to creator mode instead of resetting to AUTH/GALLERY
       setAppState(AppState.IDLE);
     } finally {
       setIsLoading(false);
@@ -106,7 +122,7 @@ const App: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm("Delete this greeting forever?")) {
+    if (window.confirm("Are you sure you want to delete this greeting? This cannot be undone.")) {
       try {
         await deleteGreeting(id);
         if (user) loadGreetings(user.uid);
@@ -118,7 +134,10 @@ const App: React.FC = () => {
 
   const handleApiKeyDialogContinue = async () => {
     setShowApiKeyDialog(false);
-    if (window.aistudio) await window.aistudio.openSelectKey();
+    if (window.aistudio) {
+      await window.aistudio.openSelectKey();
+      // Proceed logic: after triggering dialog, assume success as per race condition notes
+    }
   };
 
   return (
@@ -174,7 +193,7 @@ const App: React.FC = () => {
       </header>
 
       <main className="flex-grow flex flex-col items-center p-6 w-full max-w-6xl mx-auto">
-        {firebaseError && appState === AppState.IDLE && (
+        {firebaseError && (appState === AppState.IDLE || appState === AppState.AUTH) && (
           <div className="w-full max-w-3xl mb-6 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-2xl flex items-center gap-3 text-yellow-500 text-sm">
             <AlertCircle className="shrink-0" />
             <p>{firebaseError}</p>
@@ -185,12 +204,21 @@ const App: React.FC = () => {
           <div className="flex-grow flex flex-col items-center justify-center text-center max-w-lg animate-in fade-in zoom-in duration-1000">
             <h2 className="text-5xl font-extrabold mb-6 leading-tight">Cinematic Greetings for Special Moments</h2>
             <p className="text-xl text-gray-400 mb-8">Personalize your wishes with high-end AI video and unique voices. Log in to start creating.</p>
-            <button 
-              onClick={loginWithGoogle}
-              className="px-10 py-4 bg-indigo-600 rounded-2xl text-xl font-bold hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-600/20 hover:-translate-y-1"
-            >
-              Sign in with Google
-            </button>
+            {isFirebaseEnabled() ? (
+              <button 
+                onClick={loginWithGoogle}
+                className="px-10 py-4 bg-indigo-600 rounded-2xl text-xl font-bold hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-600/20 hover:-translate-y-1"
+              >
+                Sign in with Google
+              </button>
+            ) : (
+              <button 
+                onClick={() => setAppState(AppState.IDLE)}
+                className="px-10 py-4 bg-indigo-600 rounded-2xl text-xl font-bold hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-600/20 hover:-translate-y-1"
+              >
+                Get Started
+              </button>
+            )}
           </div>
         )}
 

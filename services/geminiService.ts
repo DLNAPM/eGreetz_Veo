@@ -9,7 +9,7 @@ import { GenerateGreetingParams, VoiceGender, VeoModel } from '../types';
 export const generateGreetingVideo = async (
   params: GenerateGreetingParams
 ): Promise<{ objectUrl: string; blob: Blob }> => {
-  // Use a fresh instance right before the call to ensure the latest API key is used
+  // Fix: Always use the mandated initialization pattern with process.env.API_KEY directly
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   // Use the advanced Veo model if a reference photo is provided, as it is required for asset-based generation
@@ -18,12 +18,12 @@ export const generateGreetingVideo = async (
   const cinematicPrompt = `
     A cinematic, high-quality holiday greeting video for ${params.occasion}.
     Visual Theme: ${params.theme}. 
-    Atmosphere: Joyful, celebratory, 8k resolution, professional lighting.
-    The video should feel personal and warm. 
-    Context: ${params.message.substring(0, 300)}
+    Atmosphere: Joyful, celebratory, professional cinematic lighting, 8k resolution feel.
+    The video should feel personal, warm, and professional. 
+    Context of the message: ${params.message.substring(0, 300)}
   `.trim();
 
-  // Reference images (ASSET type) require 16:9 aspect ratio and 720p resolution
+  // Reference images (ASSET type) require 16:9 aspect ratio and 720p resolution as per requirements
   const config: any = {
     numberOfVideos: 1,
     resolution: '720p',
@@ -57,22 +57,23 @@ export const generateGreetingVideo = async (
 
     if (operation?.response?.generatedVideos?.[0]?.video?.uri) {
       const videoUri = operation.response.generatedVideos[0].video.uri;
-      // Fetch the binary data using the authenticated download link
+      // Fetch the binary data using the authenticated download link + key
       const res = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
-      if (!res.ok) throw new Error('Failed to fetch the final video bytes');
+      if (!res.ok) throw new Error('Failed to download the generated video file.');
       
       const blob = await res.blob();
       return { objectUrl: URL.createObjectURL(blob), blob };
     }
   } catch (error: any) {
-    console.error("Gemini API Error:", error);
+    console.error("Gemini API Error details:", error);
     throw error;
   }
 
-  throw new Error('Video generation failed to return a valid operation response');
+  throw new Error('Video generation failed: No video URI returned from operation.');
 };
 
 export const generateGreetingVoice = async (text: string, voice: VoiceGender): Promise<string | null> => {
+  // Fix: Standardize initialization according to guidelines
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const voiceMap: Record<VoiceGender, string> = {
@@ -96,7 +97,8 @@ export const generateGreetingVoice = async (text: string, voice: VoiceGender): P
     });
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    // Note: TTS returns raw PCM data; consumers need to decode it accordingly
+    // Note: TTS returns raw PCM data; consumers need to decode it accordingly.
+    // In this app, we just return the base64-prefixed data if needed.
     return base64Audio ? `data:audio/pcm;base64,${base64Audio}` : null;
   } catch (e) {
     console.error("Voice Generation failed:", e);

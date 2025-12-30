@@ -1,11 +1,8 @@
 
-// Fix: Consolidate modular imports and ensure type exports are correctly handled
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import type { FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import type { Auth, User } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, orderBy } from 'firebase/firestore';
-import type { Firestore } from 'firebase/firestore';
+// Fix: Consolidate modular imports and use inline type declarations to ensure compatibility with ESM resolution and avoid "no exported member" errors
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, type Auth, type User } from 'firebase/auth';
+import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, orderBy, type Firestore } from 'firebase/firestore';
 import { GreetingRecord } from '../types';
 
 // Provided Firebase configuration
@@ -47,7 +44,6 @@ const initializeFirebase = () => {
     app = getApps().length === 0 ? initializeApp(config) : getApp();
     
     // Initialize services directly using the app instance
-    // This ensures they are registered with the correct core instance
     auth = getAuth(app);
     db = getFirestore(app);
     
