@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { loginWithGoogle, logout, getUserGreetings, saveGreeting, deleteGreeting, isFirebaseEnabled, onAuthStateChangedListener, type User } from './services/firebase';
-import { AppState, GenerateGreetingParams, GreetingRecord, VeoModel, AspectRatio } from './types';
+import { AppState, GenerateGreetingParams, GreetingRecord, VeoModel, AspectRatio, VoiceGender } from './types';
 import GreetingCreator from './components/GreetingCreator';
 import GreetingGallery from './components/GreetingGallery';
 import GreetingResult from './components/GreetingResult';
@@ -24,13 +24,10 @@ const App: React.FC = () => {
     const init = async () => {
       setIsFirebaseReady(isFirebaseEnabled());
       
-      // Check for key in AI Studio environment
       if (window.aistudio) {
         const hasKey = await window.aistudio.hasSelectedApiKey();
         setIsKeyConnected(hasKey);
       } else {
-        // Fallback check for environment variables in standard browser environments
-        // This relies on vite.config.js mapping VITE_API_KEY to process.env.API_KEY
         const key = process.env.API_KEY;
         setIsKeyConnected(!!key);
       }
@@ -65,33 +62,24 @@ const App: React.FC = () => {
       await loginWithGoogle();
     } catch (err: any) {
       console.error("Login Error:", err);
-      alert("Login failed. Check your Firebase domain authorization.");
+      alert("Login failed.");
     }
   };
 
+  // Fix: Optimized key selection handling for Veo models, assuming success after triggering openSelectKey.
   const handleConnectKey = async () => {
     if (window.aistudio) {
       await window.aistudio.openSelectKey();
-      // Assume selection successful as per guidelines to avoid race condition
       setIsKeyConnected(true);
       setShowApiKeyDialog(false);
-    } else {
-      alert("Please ensure the VITE_API_KEY environment variable is configured in your hosting dashboard.");
     }
   };
 
-  const handleGenerate = async (params: GenerateGreetingParams) => {
-    // Check key status before proceeding, specifically for Veo models
+  const handleGenerate = async (params: GenerateGreetingParams & { extended: boolean }) => {
     if (window.aistudio) {
       const hasKey = await window.aistudio.hasSelectedApiKey();
       if (!hasKey) {
         setShowApiKeyDialog(true);
-        return;
-      }
-    } else {
-      // Direct check for mapped process.env.API_KEY in non-AI Studio environment
-      if (!process.env.API_KEY) {
-        alert("Authentication Error: VITE_API_KEY is missing from environment.");
         return;
       }
     }
@@ -100,6 +88,7 @@ const App: React.FC = () => {
     setAppState(AppState.LOADING);
     
     try {
+      // Pass the extended flag to the service for 15s videos
       const { objectUrl } = await generateGreetingVideo(params);
       
       if (user && isFirebaseReady) {
@@ -122,18 +111,15 @@ const App: React.FC = () => {
       setAppState(AppState.SUCCESS);
     } catch (e: any) {
       console.error("Video Generation Error:", e);
-      const errorMessage = e.toString();
-      
-      // Handle key-specific errors
-      if (errorMessage.includes("Requested entity was not found") && window.aistudio) {
+      // Fix: Adhering to Gemini rules for "Requested entity was not found" error by resetting state and prompting for key.
+      if (e.message?.includes("Requested entity was not found")) {
         setIsKeyConnected(false);
-        setShowApiKeyDialog(true);
-      } else if (errorMessage.includes("API Key") || errorMessage.includes("401") || errorMessage.includes("unauthorized")) {
-        alert("Authentication Error: Please ensure a valid paid API Key is selected or VITE_API_KEY is correctly configured.");
-      } else {
-        alert("Generation Interrupted: " + errorMessage);
+        if (window.aistudio) {
+          await window.aistudio.openSelectKey();
+          setIsKeyConnected(true);
+        }
       }
-      
+      alert("Generation Error: " + e.toString());
       setAppState(AppState.IDLE);
     } finally {
       setIsLoading(false);
@@ -151,8 +137,29 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSelectGreeting = (greeting: GreetingRecord) => {
+    // Populate the viewer with existing greeting data
+    setCurrentResult({
+      url: greeting.videoUrl,
+      params: {
+        occasion: greeting.occasion,
+        message: greeting.message,
+        theme: greeting.theme,
+        voice: VoiceGender.FEMALE, 
+        userPhoto: null,
+        model: VeoModel.VEO_FAST,
+        aspectRatio: AspectRatio.LANDSCAPE
+      }
+    });
+    setAppState(AppState.SUCCESS);
+  };
+
+  const handleCancelCreator = () => {
+    setAppState(user ? AppState.GALLERY : AppState.AUTH);
+  };
+
   return (
-    <div className="min-h-screen bg-[#000000] text-white flex flex-col font-sans selection:bg-blue-600/30">
+    <div className="min-h-screen bg-black text-white flex flex-col font-sans selection:bg-blue-600/30">
       {showApiKeyDialog && <ApiKeyDialog onContinue={handleConnectKey} />}
       
       <header className="px-6 py-5 flex justify-between items-center border-b border-white/5 bg-black/95 backdrop-blur-xl sticky top-0 z-50">
@@ -169,32 +176,23 @@ const App: React.FC = () => {
             </h1>
             <div className="flex items-center gap-1.5 mt-1.5">
               <span className={`flex h-2 w-2 rounded-full ${isKeyConnected ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`}></span>
-              <span className="text-[10px] text-gray-400 font-black tracking-widest uppercase flex items-center gap-1">
-                {isKeyConnected ? 'System Operational' : 'Key Selection Required'}
+              <span className="text-[10px] text-gray-400 font-black tracking-widest uppercase">
+                {isKeyConnected ? 'Ready for Production' : 'Key Required'}
               </span>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
-          {!isKeyConnected && window.aistudio && (
-            <button 
-              onClick={handleConnectKey}
-              className="hidden md:flex items-center gap-2 px-4 py-2 border border-blue-500/30 bg-blue-500/10 text-blue-400 rounded-full hover:bg-blue-500 hover:text-white transition-all font-bold text-xs uppercase tracking-wider"
-            >
-              <Key size={14} /> Connect Billing
-            </button>
-          )}
-
           {user ? (
             <>
               <button 
                 onClick={() => setAppState(AppState.IDLE)}
-                className="flex items-center gap-2 px-6 py-2 bg-blue-600 rounded-full hover:bg-blue-500 transition-all font-bold text-sm shadow-lg shadow-blue-600/30"
+                className="flex items-center gap-2 px-6 py-2 bg-blue-600 rounded-full hover:bg-blue-500 transition-all font-bold text-sm"
               >
-                <Plus size={16} strokeWidth={3} /> Create New
+                <Plus size={16} strokeWidth={3} /> New Script
               </button>
-              <button onClick={logout} className="p-2 text-gray-500 hover:text-white transition-colors" title="Sign Out">
+              <button onClick={logout} className="p-2 text-gray-500 hover:text-white transition-colors">
                 <LogOut size={20} />
               </button>
             </>
@@ -213,29 +211,21 @@ const App: React.FC = () => {
         {!isFirebaseReady && (
           <div className="w-full max-w-4xl mb-6 p-4 bg-blue-900/10 border border-blue-500/20 rounded-2xl flex items-center gap-3 text-blue-200 text-sm">
             <AlertCircle size={20} className="text-blue-400" />
-            <span>Cloud Sync Offline: Personal collection will not be saved.</span>
+            <span>Local Mode: Your greetings will not be saved after page reload.</span>
           </div>
         )}
 
         {appState === AppState.AUTH && (
           <div className="flex-grow flex flex-col items-center justify-center text-center max-w-3xl animate-in fade-in zoom-in duration-1000">
-            <h2 className="text-7xl font-black mb-8 leading-[1] text-white tracking-tighter">Cinematic Greeting <span className="text-blue-600">Reimagined.</span></h2>
-            <p className="text-2xl text-gray-500 mb-12 leading-relaxed font-medium">Generate Hollywood-grade video greetings with custom AI voices and personalized visuals in seconds.</p>
+            <h2 className="text-7xl font-black mb-8 leading-[1] text-white tracking-tighter">Cinematic <span className="text-blue-600">Reimagined.</span></h2>
+            <p className="text-2xl text-gray-500 mb-12 leading-relaxed font-medium">Create Hollywood-grade video greetings with automated speed-fit AI voices.</p>
             <div className="flex flex-col sm:flex-row gap-4">
               <button 
                 onClick={() => setAppState(AppState.IDLE)}
-                className="px-16 py-6 bg-blue-600 rounded-3xl text-2xl font-black hover:bg-blue-500 transition-all shadow-2xl shadow-blue-600/40 hover:-translate-y-1 active:scale-95 uppercase tracking-widest"
+                className="px-16 py-6 bg-blue-600 rounded-3xl text-2xl font-black hover:bg-blue-500 transition-all shadow-2xl shadow-blue-600/40 uppercase tracking-widest"
               >
                 Start Creating
               </button>
-              {!user && isFirebaseReady && (
-                <button 
-                  onClick={handleLogin}
-                  className="px-16 py-6 bg-white/5 border border-white/10 rounded-3xl text-2xl font-black hover:bg-white/10 transition-all uppercase tracking-widest"
-                >
-                  Sign In
-                </button>
-              )}
             </div>
           </div>
         )}
@@ -244,13 +234,14 @@ const App: React.FC = () => {
           <GreetingGallery 
             greetings={greetings} 
             onDelete={handleDelete} 
+            onSelect={handleSelectGreeting}
             onCreateNew={() => setAppState(AppState.IDLE)}
           />
         )}
 
         {appState === AppState.IDLE && (
           <div className="w-full flex justify-center py-6">
-            <GreetingCreator onGenerate={handleGenerate} />
+            <GreetingCreator onGenerate={handleGenerate} onCancel={handleCancelCreator} />
           </div>
         )}
 

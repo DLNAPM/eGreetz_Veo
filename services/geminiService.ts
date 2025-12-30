@@ -8,27 +8,26 @@ import { GenerateGreetingParams, VoiceGender, VeoModel } from '../types';
 
 /**
  * Generates a cinematic greeting video using Gemini Veo models.
+ * Now supports extending the video to ~15 seconds if requested.
  */
 export const generateGreetingVideo = async (
-  params: GenerateGreetingParams
+  params: GenerateGreetingParams & { extended?: boolean }
 ): Promise<{ objectUrl: string; blob: Blob }> => {
-  // Always create a new instance to ensure we have the latest API key from state/env
-  // NOTE: Rely on the environment variable injection.
   const apiKey = process.env.API_KEY;
   
   if (!apiKey) {
-    throw new Error("API Key is missing. If you are in AI Studio, please select a paid API key. If deployed, ensure the API_KEY environment variable is set.");
+    throw new Error("API Key is missing. Please select a paid API key in AI Studio.");
   }
   
   const ai = new GoogleGenAI({ apiKey });
 
+  // If using photo reference, we must use the standard (non-fast) model
   const modelToUse = params.userPhoto ? 'veo-3.1-generate-preview' : params.model;
 
   const cinematicPrompt = `
     A cinematic, high-quality holiday greeting video for ${params.occasion}.
     Visual Theme: ${params.theme}. 
     Atmosphere: Joyful, celebratory, professional cinematic lighting, 8k resolution feel.
-    The video should be visually stunning.
     Context: ${params.message.substring(0, 300)}
   `.trim();
 
@@ -55,6 +54,7 @@ export const generateGreetingVideo = async (
   }
 
   try {
+    // 1. Initial Generation
     let operation = await ai.models.generateVideos(payload);
 
     while (!operation.done) {
@@ -62,9 +62,31 @@ export const generateGreetingVideo = async (
       operation = await ai.operations.getVideosOperation({ operation: operation });
     }
 
-    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+    let finalVideo = operation.response?.generatedVideos?.[0]?.video;
+
+    // 2. Extension (if 15s is requested)
+    if (params.extended && finalVideo) {
+      const extensionPayload = {
+        model: 'veo-3.1-generate-preview', // Extension usually requires the standard model
+        prompt: `The celebration continues and reaches a beautiful climax for ${params.occasion}.`,
+        video: finalVideo,
+        config: {
+          numberOfVideos: 1,
+          resolution: '720p',
+          aspectRatio: config.aspectRatio,
+        }
+      };
+
+      let extendOp = await ai.models.generateVideos(extensionPayload);
+      while (!extendOp.done) {
+        await new Promise((resolve) => setTimeout(resolve, 10000));
+        extendOp = await ai.operations.getVideosOperation({ operation: extendOp });
+      }
+      finalVideo = extendOp.response?.generatedVideos?.[0]?.video;
+    }
+
+    const downloadLink = finalVideo?.uri;
     if (downloadLink) {
-      // CRITICAL: Append an API key when fetching from the download link.
       const response = await fetch(`${downloadLink}&key=${apiKey}`);
       if (!response.ok) throw new Error('Failed to download the generated video file.');
       
@@ -81,6 +103,7 @@ export const generateGreetingVideo = async (
 
 /**
  * Generates audio for a greeting message using Gemini TTS.
+ * Updated to speed up delivery to fit shorter video windows.
  */
 export const generateGreetingVoice = async (text: string, voice: VoiceGender): Promise<string | null> => {
   const apiKey = process.env.API_KEY;
@@ -95,9 +118,10 @@ export const generateGreetingVoice = async (text: string, voice: VoiceGender): P
   };
 
   try {
+    // We instruct the model to speak faster to hit the ~8s target
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: `Say this greeting message warmly: ${text}` }] }],
+      contents: [{ parts: [{ text: `Say this greeting message warmly but VERY RAPIDLY, finishing in under 8 seconds: ${text}` }] }],
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {

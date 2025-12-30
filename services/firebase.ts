@@ -1,6 +1,8 @@
 
+// Fix: Separated value imports from type imports to resolve module resolution errors in firebase/app.
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import type { FirebaseApp } from 'firebase/app';
+// Fix: Separated value imports from type imports for firebase/auth to resolve "no exported member" errors.
 import { 
   getAuth, 
   GoogleAuthProvider, 
@@ -9,6 +11,7 @@ import {
   onAuthStateChanged
 } from 'firebase/auth';
 import type { User as FirebaseUser, Auth } from 'firebase/auth';
+// Fix: Separated value imports from type imports for firebase/firestore.
 import { 
   getFirestore, 
   collection, 
