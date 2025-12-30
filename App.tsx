@@ -20,14 +20,14 @@ import GreetingResult from './components/GreetingResult';
 import LoadingIndicator from './components/LoadingIndicator';
 import ApiKeyDialog from './components/ApiKeyDialog';
 import { LogIn, LogOut, Plus, ShieldCheck, Key, AlertCircle } from 'lucide-react';
-import { generateGreetingVideo } from './services/geminiService';
+import { generateGreetingVideo, generateGreetingVoice } from './services/geminiService';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [appState, setAppState] = useState<AppState>(AppState.AUTH);
   const [myGreetings, setMyGreetings] = useState<GreetingRecord[]>([]);
   const [receivedGreetings, setReceivedGreetings] = useState<GreetingRecord[]>([]);
-  const [currentResult, setCurrentResult] = useState<{ url: string; params: GenerateGreetingParams; record?: GreetingRecord } | null>(null);
+  const [currentResult, setCurrentResult] = useState<{ url: string; params: GenerateGreetingParams; record?: GreetingRecord; audioUrl?: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
   const [isKeyConnected, setIsKeyConnected] = useState(false);
@@ -75,6 +75,12 @@ const App: React.FC = () => {
   };
 
   const handleGenerate = async (params: GenerateGreetingParams & { extended: boolean }) => {
+    if (!user) {
+      alert("Please login with your Google Account to create and share cinematic greetings.");
+      setAppState(AppState.AUTH);
+      return;
+    }
+
     if (window.aistudio) {
       const hasKey = await window.aistudio.hasSelectedApiKey();
       if (!hasKey) {
@@ -87,13 +93,22 @@ const App: React.FC = () => {
     setAppState(AppState.LOADING);
     
     try {
-      const { blob } = await generateGreetingVideo(params);
+      // 1. Generate Voice First to determine required video length
+      const voiceResult = await generateGreetingVoice(params.message, params.voice);
+      const audioDuration = voiceResult?.duration || 7;
+      const audioBase64 = voiceResult?.base64;
+
+      // 2. Generate Video synced to Audio Duration + 2.5 seconds
+      const { blob } = await generateGreetingVideo({ 
+        ...params, 
+        audioDuration 
+      });
       
       let finalUrl = "";
       let newRecord: GreetingRecord | undefined;
 
-      if (user && isFirebaseReady) {
-        // Step 1: Upload to Cloud Storage to get a permanent shareable URL
+      if (isFirebaseReady) {
+        // Step 1: Upload to Cloud Storage to get a permanent shareable URL (prevents "blob:" links)
         finalUrl = await uploadVideoToCloud(blob, user.uid);
 
         // Step 2: Save metadata to Firestore
@@ -118,19 +133,23 @@ const App: React.FC = () => {
 
         loadData(user);
       } else {
-        // Fallback for non-logged in or firebase error
         finalUrl = URL.createObjectURL(blob);
       }
 
-      setCurrentResult({ url: finalUrl, params, record: newRecord });
+      setCurrentResult({ 
+        url: finalUrl, 
+        params, 
+        record: newRecord,
+        audioUrl: audioBase64 ? `data:audio/wav;base64,${audioBase64}` : undefined 
+      });
       setAppState(AppState.SUCCESS);
     } catch (e: any) {
-      console.error("Video Generation Error:", e);
+      console.error("Production Error:", e);
       if (e.message?.includes("Requested entity was not found")) {
         setIsKeyConnected(false);
         if (window.aistudio) await window.aistudio.openSelectKey();
       }
-      alert("Generation Error: " + e.toString());
+      alert("Production Error: " + e.toString());
       setAppState(AppState.IDLE);
     } finally {
       setIsLoading(false);
@@ -169,9 +188,9 @@ const App: React.FC = () => {
     if (!currentResult?.record || !user) return;
     try {
       await sendToInternalUser(user.displayName || "A Friend", email, currentResult.record);
-      alert("Cinematic greeting sent to " + email);
+      alert("Sent! This greeting will appear in their 'Received' inbox.");
     } catch (err: any) {
-      alert("Share failed: " + err.message);
+      alert("Internal share failed: " + err.message);
     }
   };
 
@@ -232,19 +251,19 @@ const App: React.FC = () => {
         {!isFirebaseReady && (
           <div className="w-full max-w-4xl mb-6 p-4 bg-red-900/10 border border-red-500/20 rounded-2xl flex items-center gap-3 text-red-200 text-sm">
             <AlertCircle size={20} className="text-red-400" />
-            <span>Cloud Services Disconnected. Sharing will not work. Check VITE_FIREBASE_CONFIG.</span>
+            <span>Cloud Sync Inactive. Sharing is disabled. Please verify Firebase environment variables.</span>
           </div>
         )}
 
         {appState === AppState.AUTH && (
           <div className="flex-grow flex flex-col items-center justify-center text-center max-w-3xl animate-in fade-in zoom-in duration-1000">
             <h2 className="text-7xl font-black mb-8 leading-[1] text-white tracking-tighter">Cinematic <span className="text-blue-600">Reimagined.</span></h2>
-            <p className="text-2xl text-gray-400 mb-12 leading-relaxed font-medium">Create and host Hollywood-grade video greetings. Permanent cloud links ready for sharing.</p>
+            <p className="text-2xl text-gray-400 mb-12 leading-relaxed font-medium">Create and host Hollywood-grade video greetings. Permanent cloud storage ensures your links never expire.</p>
             <button 
-              onClick={() => setAppState(AppState.IDLE)}
+              onClick={user ? () => setAppState(AppState.IDLE) : loginWithGoogle}
               className="px-16 py-6 bg-blue-600 rounded-3xl text-2xl font-black hover:bg-blue-500 transition-all shadow-2xl shadow-blue-600/40 uppercase tracking-widest text-white"
             >
-              Start Creating
+              {user ? 'Start Creating' : 'Login to Start'}
             </button>
           </div>
         )}
@@ -278,7 +297,7 @@ const App: React.FC = () => {
       </main>
 
       <footer className="py-10 text-center text-gray-800 text-xs border-t border-white/5 w-full">
-        <p className="font-bold tracking-widest uppercase">&copy; {new Date().getFullYear()} eGreetz &bull; Production Core</p>
+        <p className="font-bold tracking-widest uppercase">&copy; {new Date().getFullYear()} eGreetz &bull; Digital Production Studio</p>
       </footer>
     </div>
   );

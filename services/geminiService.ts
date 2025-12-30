@@ -7,21 +7,36 @@ import {
 import { GenerateGreetingParams, VoiceGender, VeoModel } from '../types';
 
 /**
+ * Helper to decode base64 audio and get its duration in seconds.
+ * Note: Gemini TTS output is raw PCM, so we calculate based on expected sample rate.
+ */
+async function getAudioDuration(base64Data: string): Promise<number> {
+  try {
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    
+    // The audio bytes returned by the API is raw PCM data (no header).
+    // Assuming 16-bit mono PCM at 24kHz (2 bytes per sample).
+    const duration = (bytes.length / 2) / 24000; 
+    return duration;
+  } catch (e) {
+    console.warn("Could not determine exact audio duration, defaulting to 8s", e);
+    return 8;
+  }
+}
+
+/**
  * Generates a cinematic greeting video using Gemini Veo models.
- * Now supports extending the video to ~15 seconds if requested.
+ * Dynamically adjusts length to be syncronized with the generated audio.
  */
 export const generateGreetingVideo = async (
-  params: GenerateGreetingParams & { extended?: boolean }
+  params: GenerateGreetingParams & { audioDuration?: number }
 ): Promise<{ objectUrl: string; blob: Blob }> => {
-  const apiKey = process.env.API_KEY;
-  
-  if (!apiKey) {
-    throw new Error("API Key is missing. Please select a paid API key in AI Studio.");
-  }
-  
-  const ai = new GoogleGenAI({ apiKey });
-
-  // If using photo reference, we must use the standard (non-fast) model
+  // Always initialize with named parameter and process.env.API_KEY
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const modelToUse = params.userPhoto ? 'veo-3.1-generate-preview' : params.model;
 
   const cinematicPrompt = `
@@ -54,7 +69,7 @@ export const generateGreetingVideo = async (
   }
 
   try {
-    // 1. Initial Generation
+    // Generate initial 7s video
     let operation = await ai.models.generateVideos(payload);
 
     while (!operation.done) {
@@ -63,12 +78,15 @@ export const generateGreetingVideo = async (
     }
 
     let finalVideo = operation.response?.generatedVideos?.[0]?.video;
+    
+    // Extend video if audio duration exceeds standard 7s length
+    const targetDuration = (params.audioDuration || 0) + 2.5;
+    const currentDuration = 7;
 
-    // 2. Extension (if 15s is requested)
-    if (params.extended && finalVideo) {
+    if (targetDuration > currentDuration && finalVideo) {
       const extensionPayload = {
-        model: 'veo-3.1-generate-preview', // Extension usually requires the standard model
-        prompt: `The celebration continues and reaches a beautiful climax for ${params.occasion}.`,
+        model: 'veo-3.1-generate-preview',
+        prompt: `The celebration reaches its cinematic peak for ${params.occasion}, keeping the same visual style and environment.`,
         video: finalVideo,
         config: {
           numberOfVideos: 1,
@@ -87,29 +105,28 @@ export const generateGreetingVideo = async (
 
     const downloadLink = finalVideo?.uri;
     if (downloadLink) {
-      const response = await fetch(`${downloadLink}&key=${apiKey}`);
-      if (!response.ok) throw new Error('Failed to download the generated video file.');
+      // Append API key when fetching from the download link
+      const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+      if (!response.ok) throw new Error('Failed to download video.');
       
       const blob = await response.blob();
       return { objectUrl: URL.createObjectURL(blob), blob };
     }
   } catch (error: any) {
-    console.error("Gemini API Error:", error);
+    console.error("Gemini Video Error:", error);
     throw error;
   }
 
-  throw new Error('Video generation failed to return a valid result.');
+  throw new Error('Video generation failed.');
 };
 
 /**
  * Generates audio for a greeting message using Gemini TTS.
- * Updated to speed up delivery to fit shorter video windows.
+ * Returns duration for video sync.
  */
-export const generateGreetingVoice = async (text: string, voice: VoiceGender): Promise<string | null> => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) return null;
-  
-  const ai = new GoogleGenAI({ apiKey });
+export const generateGreetingVoice = async (text: string, voice: VoiceGender): Promise<{ base64: string, duration: number } | null> => {
+  // Always initialize with named parameter and process.env.API_KEY
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const voiceMap: Record<VoiceGender, string> = {
     [VoiceGender.MALE_TENOR]: 'Kore',
@@ -118,10 +135,9 @@ export const generateGreetingVoice = async (text: string, voice: VoiceGender): P
   };
 
   try {
-    // We instruct the model to speak faster to hit the ~8s target
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: `Say this greeting message warmly but VERY RAPIDLY, finishing in under 8 seconds: ${text}` }] }],
+      contents: [{ parts: [{ text: `Speak this greeting message warmly but at a brisk, high-energy pace (around 160 words per minute): ${text}` }] }],
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
@@ -133,7 +149,10 @@ export const generateGreetingVoice = async (text: string, voice: VoiceGender): P
     });
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    return base64Audio ? `data:audio/pcm;base64,${base64Audio}` : null;
+    if (!base64Audio) return null;
+
+    const duration = await getAudioDuration(base64Audio);
+    return { base64: base64Audio, duration };
   } catch (e) {
     console.error("Voice Generation failed:", e);
     return null;
