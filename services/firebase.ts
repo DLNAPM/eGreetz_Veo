@@ -1,8 +1,28 @@
 
-// Consolidated type and value imports from Firebase modular SDK to resolve resolution errors where exported members were not being recognized.
-import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, type Auth, type User } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, orderBy, type Firestore } from 'firebase/firestore';
+// Fix: Use standard Firebase v9 modular imports.
+// If "no exported member" errors persist, ensure the 'firebase' package is version 9 or later.
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { 
+  getAuth, 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  signOut, 
+  onAuthStateChanged,
+  type User,
+  type Auth
+} from 'firebase/auth';
+import { 
+  getFirestore, 
+  collection, 
+  addDoc, 
+  query, 
+  where, 
+  getDocs, 
+  deleteDoc, 
+  doc, 
+  orderBy, 
+  type Firestore 
+} from 'firebase/firestore';
 import { GreetingRecord } from '../types';
 
 // Provided Production Firebase configuration
@@ -16,31 +36,18 @@ const firebaseConfig = {
   measurementId: "G-MRV9FYGGEQ"
 };
 
-let app: FirebaseApp | undefined;
-let auth: Auth | undefined;
-let db: Firestore | undefined;
+// Initialize Firebase App
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-const initializeFirebase = () => {
-  if (app) return;
-
-  try {
-    // Production initialization using explicitly provided config
-    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-    auth = getAuth(app);
-    db = getFirestore(app);
-  } catch (error) {
-    console.error("Firebase Production Initialization failed:", error);
-  }
-};
-
-initializeFirebase();
-
+// Initialize Services
+const auth = getAuth(app);
+const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
 
-export const isFirebaseEnabled = () => !!auth && !!db;
+export const isFirebaseEnabled = () => !!app && !!auth && !!db;
 
 export const loginWithGoogle = async () => {
-  if (!auth) throw new Error("Firebase Auth not initialized");
+  if (!auth) throw new Error("Firebase Auth service not available");
   try {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
@@ -51,8 +58,11 @@ export const loginWithGoogle = async () => {
 };
 
 export const logout = async () => {
-  if (auth) {
+  if (!auth) return;
+  try {
     await signOut(auth);
+  } catch (error) {
+    console.error("Logout failed:", error);
   }
 };
 
@@ -62,7 +72,7 @@ export const onAuthStateChangedListener = (callback: (user: User | null) => void
 };
 
 export const saveGreeting = async (userId: string, greeting: Omit<GreetingRecord, 'id'>) => {
-  if (!db) throw new Error("Firestore Production collection not initialized");
+  if (!db) throw new Error("Firestore service not available");
   return await addDoc(collection(db, 'greetings'), {
     ...greeting,
     userId
@@ -86,9 +96,9 @@ export const getUserGreetings = async (userId: string): Promise<GreetingRecord[]
 };
 
 export const deleteGreeting = async (greetingId: string) => {
-  if (!db) throw new Error("Firestore not initialized");
+  if (!db) throw new Error("Firestore service not available");
   await deleteDoc(doc(db, 'greetings', greetingId));
 };
 
-export type { User };
+export type { User, Auth };
 export { auth, db };
