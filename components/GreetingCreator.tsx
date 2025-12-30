@@ -1,15 +1,16 @@
 
-import React, { useState, useRef } from 'react';
-import { Occasion, GreetingTheme, VoiceGender, GenerateGreetingParams, ImageFile, VeoModel, AspectRatio } from '../types';
+import React, { useState, useRef, useEffect } from 'react';
+import { Occasion, GreetingTheme, VoiceGender, GenerateGreetingParams, ImageFile, VeoModel, AspectRatio, GreetingRecord } from '../types';
 import { Mic, Upload, X, Sparkles, Wand2, ChevronLeft, Clock, Zap, HelpCircle } from 'lucide-react';
 import HelpModal from './HelpModal';
 
 interface Props {
   onGenerate: (params: GenerateGreetingParams & { extended: boolean }) => void;
   onCancel: () => void;
+  initialData?: GreetingRecord | null;
 }
 
-const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel }) => {
+const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData }) => {
   const [occasion, setOccasion] = useState<Occasion>(Occasion.BIRTHDAY);
   const [message, setMessage] = useState('');
   const [theme, setTheme] = useState<GreetingTheme>(GreetingTheme.BALLOONS);
@@ -20,6 +21,18 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel }) => {
   const [showHelp, setShowHelp] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Initialize from initialData if editing
+  useEffect(() => {
+    if (initialData) {
+      setOccasion(initialData.occasion);
+      setMessage(initialData.message);
+      setTheme(initialData.theme);
+      if (initialData.voice) setVoice(initialData.voice);
+      // Photo is not easily restorable from URL to File object without re-fetching, 
+      // but the user can upload a new one.
+    }
+  }, [initialData]);
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -58,7 +71,7 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel }) => {
         <div className="text-center md:text-left">
           <h2 className="text-4xl font-bold mb-2 flex items-center justify-center md:justify-start gap-3 text-white">
             <Sparkles className="text-blue-500 w-8 h-8" /> 
-            Cinematic Creator
+            {initialData ? 'Edit Masterpiece' : 'Cinematic Creator'}
             <button 
               onClick={() => setShowHelp(true)}
               className="p-2 text-gray-600 hover:text-blue-500 transition-colors"
@@ -67,7 +80,9 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel }) => {
               <HelpCircle size={24} />
             </button>
           </h2>
-          <p className="text-gray-400 text-lg">Define your vision and let production-grade AI handle the rest.</p>
+          <p className="text-gray-400 text-lg">
+            {initialData ? 'Refining your cinematic vision...' : 'Define your vision and let production-grade AI handle the rest.'}
+          </p>
         </div>
         <button 
           onClick={(e) => {
@@ -210,7 +225,7 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel }) => {
             disabled={!message.trim()}
             className="flex-grow py-7 bg-blue-600 rounded-3xl font-black text-2xl flex items-center justify-center gap-5 hover:bg-blue-500 transition-all active:scale-[0.99] disabled:opacity-30 disabled:cursor-not-allowed shadow-[0_20px_60px_-15px_rgba(37,99,235,0.6)] text-white"
           >
-            <Zap size={32} fill="currentColor" /> Generate {extended ? '15s' : '7s'} Video
+            <Zap size={32} fill="currentColor" /> {initialData ? 'Update & Re-generate' : `Generate ${extended ? '15s' : '7s'} Video`}
           </button>
         </div>
       </div>

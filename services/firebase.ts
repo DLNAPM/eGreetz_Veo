@@ -25,6 +25,7 @@ import {
   deleteDoc, 
   doc, 
   orderBy,
+  updateDoc,
   serverTimestamp,
   type Firestore
 } from 'firebase/firestore';
@@ -134,6 +135,15 @@ export const saveGreeting = async (userId: string, greeting: Omit<GreetingRecord
   });
 };
 
+export const updateGreeting = async (id: string, greeting: Partial<GreetingRecord>) => {
+  if (!db) throw new Error("Database unavailable.");
+  const docRef = doc(db, 'greetings', id);
+  await updateDoc(docRef, {
+    ...greeting,
+    updatedAt: serverTimestamp()
+  });
+};
+
 export const getUserGreetings = async (userId: string): Promise<GreetingRecord[]> => {
   if (!db) return [];
   try {
@@ -164,6 +174,7 @@ export const sendToInternalUser = async (senderName: string, recipientEmail: str
     occasion: greeting.occasion,
     message: greeting.message,
     theme: greeting.theme,
+    voice: greeting.voice || 'Female',
     sharedAt: serverTimestamp(),
     createdAt: greeting.createdAt
   });

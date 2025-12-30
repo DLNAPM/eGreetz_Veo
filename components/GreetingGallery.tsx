@@ -1,18 +1,19 @@
 
 import React from 'react';
 import { GreetingRecord } from '../types';
-import { Trash2, Share2, Play, Clock, Inbox, Sparkles } from 'lucide-react';
+import { Trash2, Share2, Play, Clock, Inbox, Sparkles, Edit3 } from 'lucide-react';
 
 interface Props {
   greetings: GreetingRecord[];
   receivedGreetings?: GreetingRecord[];
   onDelete: (id: string) => void;
+  onEdit: (greeting: GreetingRecord) => void;
   onSelect: (greeting: GreetingRecord) => void;
   onCreateNew: () => void;
 }
 
-const GreetingGallery: React.FC<Props> = ({ greetings, receivedGreetings = [], onDelete, onSelect, onCreateNew }) => {
-  const renderCard = (g: any, canDelete: boolean) => (
+const GreetingGallery: React.FC<Props> = ({ greetings, receivedGreetings = [], onDelete, onEdit, onSelect, onCreateNew }) => {
+  const renderCard = (g: any, canModify: boolean) => (
     <div 
       key={g.id} 
       className="group relative bg-[#111114] border border-white/10 rounded-2xl overflow-hidden hover:border-blue-500 hover:ring-2 hover:ring-blue-500/20 transition-all shadow-xl cursor-pointer"
@@ -50,17 +51,29 @@ const GreetingGallery: React.FC<Props> = ({ greetings, receivedGreetings = [], o
             </span>
           </div>
           <div className="flex gap-1">
-            {canDelete && (
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(g.id);
-                }}
-                className="p-2 text-gray-600 hover:bg-red-500/10 hover:text-red-400 rounded-lg transition-all"
-                title="Delete"
-              >
-                <Trash2 size={16} />
-              </button>
+            {canModify && (
+              <>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit(g);
+                  }}
+                  className="p-2 text-gray-600 hover:bg-blue-500/10 hover:text-blue-400 rounded-lg transition-all"
+                  title="Edit Greeting"
+                >
+                  <Edit3 size={16} />
+                </button>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(g.id);
+                  }}
+                  className="p-2 text-gray-600 hover:bg-red-500/10 hover:text-red-400 rounded-lg transition-all"
+                  title="Delete"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </>
             )}
             <button 
               onClick={(e) => {

@@ -1,3 +1,4 @@
+
 import {Video} from '@google/genai';
 
 export enum AppState {
@@ -70,6 +71,7 @@ export interface GreetingRecord {
   message: string;
   theme: GreetingTheme;
   videoUrl: string;
+  voice?: VoiceGender;
   createdAt: number;
 }
 

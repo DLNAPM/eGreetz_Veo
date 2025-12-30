@@ -5,6 +5,7 @@ import {
   logout, 
   getUserGreetings, 
   saveGreeting, 
+  updateGreeting,
   deleteGreeting, 
   isFirebaseEnabled, 
   onAuthStateChangedListener,
@@ -29,6 +30,7 @@ const App: React.FC = () => {
   const [myGreetings, setMyGreetings] = useState<GreetingRecord[]>([]);
   const [receivedGreetings, setReceivedGreetings] = useState<GreetingRecord[]>([]);
   const [currentResult, setCurrentResult] = useState<{ url: string; params: GenerateGreetingParams; record?: GreetingRecord; audioUrl?: string } | null>(null);
+  const [editingGreeting, setEditingGreeting] = useState<GreetingRecord | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
@@ -109,25 +111,50 @@ const App: React.FC = () => {
 
       if (isFirebaseReady) {
         finalUrl = await uploadVideoToCloud(blob, user.uid);
-        const docRef = await saveGreeting(user.uid, {
-          userId: user.uid,
-          occasion: params.occasion,
-          message: params.message,
-          theme: params.theme,
-          videoUrl: finalUrl,
-          createdAt: Date.now()
-        });
+        
+        if (editingGreeting) {
+          // Update existing record
+          await updateGreeting(editingGreeting.id, {
+            occasion: params.occasion,
+            message: params.message,
+            theme: params.theme,
+            videoUrl: finalUrl,
+            voice: params.voice
+          });
 
-        newRecord = {
-          id: docRef.id,
-          userId: user.uid,
-          occasion: params.occasion,
-          message: params.message,
-          theme: params.theme,
-          videoUrl: finalUrl,
-          createdAt: Date.now()
-        };
+          newRecord = {
+            ...editingGreeting,
+            occasion: params.occasion,
+            message: params.message,
+            theme: params.theme,
+            videoUrl: finalUrl,
+            voice: params.voice
+          };
+        } else {
+          // Save new record
+          const docRef = await saveGreeting(user.uid, {
+            userId: user.uid,
+            occasion: params.occasion,
+            message: params.message,
+            theme: params.theme,
+            videoUrl: finalUrl,
+            voice: params.voice,
+            createdAt: Date.now()
+          });
 
+          newRecord = {
+            id: docRef.id,
+            userId: user.uid,
+            occasion: params.occasion,
+            message: params.message,
+            theme: params.theme,
+            videoUrl: finalUrl,
+            voice: params.voice,
+            createdAt: Date.now()
+          };
+        }
+
+        setEditingGreeting(null);
         loadData(user);
       } else {
         finalUrl = URL.createObjectURL(blob);
@@ -164,6 +191,11 @@ const App: React.FC = () => {
     }
   };
 
+  const handleEdit = (greeting: GreetingRecord) => {
+    setEditingGreeting(greeting);
+    setAppState(AppState.IDLE);
+  };
+
   const handleSelectGreeting = (greeting: GreetingRecord) => {
     setCurrentResult({
       url: greeting.videoUrl,
@@ -172,7 +204,7 @@ const App: React.FC = () => {
         occasion: greeting.occasion,
         message: greeting.message,
         theme: greeting.theme,
-        voice: VoiceGender.FEMALE, 
+        voice: greeting.voice || VoiceGender.FEMALE, 
         userPhoto: null,
         model: VeoModel.VEO_FAST,
         aspectRatio: AspectRatio.LANDSCAPE
@@ -189,6 +221,11 @@ const App: React.FC = () => {
     } catch (err: any) {
       alert("Internal share failed: " + err.message);
     }
+  };
+
+  const handleNewScript = () => {
+    setEditingGreeting(null);
+    setAppState(AppState.IDLE);
   };
 
   return (
@@ -233,7 +270,7 @@ const App: React.FC = () => {
           {user ? (
             <>
               <button 
-                onClick={() => setAppState(AppState.IDLE)}
+                onClick={handleNewScript}
                 className="flex items-center gap-2 px-6 py-2 bg-blue-600 rounded-full hover:bg-blue-500 transition-all font-bold text-sm text-white"
               >
                 <Plus size={16} strokeWidth={3} /> New Script
@@ -267,7 +304,7 @@ const App: React.FC = () => {
             <p className="text-2xl text-gray-400 mb-12 leading-relaxed font-medium">Create and host Hollywood-grade video greetings. Permanent cloud storage ensures your links never expire.</p>
             <div className="flex flex-col sm:flex-row gap-4">
               <button 
-                onClick={user ? () => setAppState(AppState.IDLE) : loginWithGoogle}
+                onClick={user ? handleNewScript : loginWithGoogle}
                 className="px-16 py-6 bg-blue-600 rounded-3xl text-2xl font-black hover:bg-blue-500 transition-all shadow-2xl shadow-blue-600/40 uppercase tracking-widest text-white"
               >
                 {user ? 'Start Creating' : 'Login to Start'}
@@ -287,14 +324,22 @@ const App: React.FC = () => {
             greetings={myGreetings} 
             receivedGreetings={receivedGreetings}
             onDelete={handleDelete} 
+            onEdit={handleEdit}
             onSelect={handleSelectGreeting}
-            onCreateNew={() => setAppState(AppState.IDLE)}
+            onCreateNew={handleNewScript}
           />
         )}
 
         {appState === AppState.IDLE && (
           <div className="w-full flex justify-center py-6">
-            <GreetingCreator onGenerate={handleGenerate} onCancel={() => setAppState(user ? AppState.GALLERY : AppState.AUTH)} />
+            <GreetingCreator 
+              onGenerate={handleGenerate} 
+              onCancel={() => {
+                setEditingGreeting(null);
+                setAppState(user ? AppState.GALLERY : AppState.AUTH);
+              }} 
+              initialData={editingGreeting}
+            />
           </div>
         )}
 
@@ -303,7 +348,7 @@ const App: React.FC = () => {
         {appState === AppState.SUCCESS && currentResult && (
           <GreetingResult 
             result={currentResult} 
-            onRestart={() => setAppState(AppState.IDLE)} 
+            onRestart={handleNewScript} 
             onGoGallery={() => setAppState(user ? AppState.GALLERY : AppState.IDLE)}
             onInternalShare={handleInternalShare}
           />
