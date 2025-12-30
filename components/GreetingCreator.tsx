@@ -1,7 +1,8 @@
 
 import React, { useState, useRef } from 'react';
 import { Occasion, GreetingTheme, VoiceGender, GenerateGreetingParams, ImageFile, VeoModel, AspectRatio } from '../types';
-import { Mic, Upload, X, Sparkles, Wand2, ChevronLeft, Clock, Zap } from 'lucide-react';
+import { Mic, Upload, X, Sparkles, Wand2, ChevronLeft, Clock, Zap, HelpCircle } from 'lucide-react';
+import HelpModal from './HelpModal';
 
 interface Props {
   onGenerate: (params: GenerateGreetingParams & { extended: boolean }) => void;
@@ -16,6 +17,7 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel }) => {
   const [photo, setPhoto] = useState<ImageFile | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [extended, setExtended] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -50,10 +52,20 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel }) => {
 
   return (
     <div className="w-full max-w-4xl bg-black border border-white/10 rounded-3xl p-8 md:p-12 shadow-[0_0_100px_rgba(37,99,235,0.05)] animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <HelpModal isOpen={showHelp} onClose={() => setShowHelp(false)} />
+      
       <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div className="text-center md:text-left">
           <h2 className="text-4xl font-bold mb-2 flex items-center justify-center md:justify-start gap-3 text-white">
-            <Sparkles className="text-blue-500 w-8 h-8" /> Cinematic Creator
+            <Sparkles className="text-blue-500 w-8 h-8" /> 
+            Cinematic Creator
+            <button 
+              onClick={() => setShowHelp(true)}
+              className="p-2 text-gray-600 hover:text-blue-500 transition-colors"
+              title="How to use"
+            >
+              <HelpCircle size={24} />
+            </button>
           </h2>
           <p className="text-gray-400 text-lg">Define your vision and let production-grade AI handle the rest.</p>
         </div>

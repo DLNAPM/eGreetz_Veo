@@ -19,7 +19,8 @@ import GreetingGallery from './components/GreetingGallery';
 import GreetingResult from './components/GreetingResult';
 import LoadingIndicator from './components/LoadingIndicator';
 import ApiKeyDialog from './components/ApiKeyDialog';
-import { LogIn, LogOut, Plus, ShieldCheck, Key, AlertCircle } from 'lucide-react';
+import HelpModal from './components/HelpModal';
+import { LogIn, LogOut, Plus, ShieldCheck, Key, AlertCircle, HelpCircle } from 'lucide-react';
 import { generateGreetingVideo, generateGreetingVoice } from './services/geminiService';
 
 const App: React.FC = () => {
@@ -30,6 +31,7 @@ const App: React.FC = () => {
   const [currentResult, setCurrentResult] = useState<{ url: string; params: GenerateGreetingParams; record?: GreetingRecord; audioUrl?: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
   const [isKeyConnected, setIsKeyConnected] = useState(false);
   const [isFirebaseReady, setIsFirebaseReady] = useState(false);
 
@@ -93,12 +95,10 @@ const App: React.FC = () => {
     setAppState(AppState.LOADING);
     
     try {
-      // 1. Generate Voice First to determine required video length
       const voiceResult = await generateGreetingVoice(params.message, params.voice);
       const audioDuration = voiceResult?.duration || 7;
       const audioBase64 = voiceResult?.base64;
 
-      // 2. Generate Video synced to Audio Duration + 2.5 seconds
       const { blob } = await generateGreetingVideo({ 
         ...params, 
         audioDuration 
@@ -108,10 +108,7 @@ const App: React.FC = () => {
       let newRecord: GreetingRecord | undefined;
 
       if (isFirebaseReady) {
-        // Step 1: Upload to Cloud Storage to get a permanent shareable URL (prevents "blob:" links)
         finalUrl = await uploadVideoToCloud(blob, user.uid);
-
-        // Step 2: Save metadata to Firestore
         const docRef = await saveGreeting(user.uid, {
           userId: user.uid,
           occasion: params.occasion,
@@ -203,6 +200,8 @@ const App: React.FC = () => {
           setShowApiKeyDialog(false);
         }
       }} />}
+
+      <HelpModal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} />
       
       <header className="px-6 py-5 flex justify-between items-center border-b border-white/5 bg-black/95 backdrop-blur-xl sticky top-0 z-50">
         <div 
@@ -224,6 +223,13 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-4">
+          <button 
+            onClick={() => setShowHelpModal(true)}
+            className="p-2 text-gray-400 hover:text-white transition-colors"
+            title="Help & Info"
+          >
+            <HelpCircle size={22} />
+          </button>
           {user ? (
             <>
               <button 
@@ -259,12 +265,20 @@ const App: React.FC = () => {
           <div className="flex-grow flex flex-col items-center justify-center text-center max-w-3xl animate-in fade-in zoom-in duration-1000">
             <h2 className="text-7xl font-black mb-8 leading-[1] text-white tracking-tighter">Cinematic <span className="text-blue-600">Reimagined.</span></h2>
             <p className="text-2xl text-gray-400 mb-12 leading-relaxed font-medium">Create and host Hollywood-grade video greetings. Permanent cloud storage ensures your links never expire.</p>
-            <button 
-              onClick={user ? () => setAppState(AppState.IDLE) : loginWithGoogle}
-              className="px-16 py-6 bg-blue-600 rounded-3xl text-2xl font-black hover:bg-blue-500 transition-all shadow-2xl shadow-blue-600/40 uppercase tracking-widest text-white"
-            >
-              {user ? 'Start Creating' : 'Login to Start'}
-            </button>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <button 
+                onClick={user ? () => setAppState(AppState.IDLE) : loginWithGoogle}
+                className="px-16 py-6 bg-blue-600 rounded-3xl text-2xl font-black hover:bg-blue-500 transition-all shadow-2xl shadow-blue-600/40 uppercase tracking-widest text-white"
+              >
+                {user ? 'Start Creating' : 'Login to Start'}
+              </button>
+              <button 
+                onClick={() => setShowHelpModal(true)}
+                className="px-8 py-6 bg-white/5 border border-white/10 rounded-3xl text-lg font-bold hover:bg-white/10 transition-all text-gray-300 flex items-center justify-center gap-3"
+              >
+                <HelpCircle size={24} /> Learn More
+              </button>
+            </div>
           </div>
         )}
 

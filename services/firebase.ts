@@ -3,17 +3,18 @@
 import { 
   initializeApp, 
   getApps, 
-  getApp
+  getApp,
+  type FirebaseApp
 } from 'firebase/app';
-import type { FirebaseApp } from 'firebase/app';
 import { 
   getAuth, 
   GoogleAuthProvider, 
   signInWithPopup, 
   signOut, 
-  onAuthStateChanged
+  onAuthStateChanged,
+  type User as FirebaseUser,
+  type Auth
 } from 'firebase/auth';
-import type { User as FirebaseUser, Auth } from 'firebase/auth';
 import { 
   getFirestore, 
   collection, 
@@ -24,16 +25,16 @@ import {
   deleteDoc, 
   doc, 
   orderBy,
-  serverTimestamp
+  serverTimestamp,
+  type Firestore
 } from 'firebase/firestore';
-import type { Firestore } from 'firebase/firestore';
 import { 
   getStorage, 
   ref, 
   uploadBytes, 
-  getDownloadURL
+  getDownloadURL,
+  type FirebaseStorage
 } from 'firebase/storage';
-import type { FirebaseStorage } from 'firebase/storage';
 import { GreetingRecord } from '../types';
 
 const getEnvVar = (key: string): string | undefined => {
