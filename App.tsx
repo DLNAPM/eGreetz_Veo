@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-// Fix: Use inline type import to ensure compatibility with ESM resolution in varied environments
-import { type User } from 'firebase/auth';
+// Fix: Use 'import type' for User to ensure compatibility with all TS versions and module resolution settings
+import type { User } from 'firebase/auth';
 import { auth, loginWithGoogle, logout, getUserGreetings, saveGreeting, deleteGreeting, isFirebaseEnabled, onAuthStateChangedListener } from './services/firebase';
 import { AppState, GenerateGreetingParams, GreetingRecord, Occasion, GreetingTheme, VoiceGender, VeoModel, AspectRatio } from './types';
 import GreetingCreator from './components/GreetingCreator';
@@ -29,13 +29,12 @@ const App: React.FC = () => {
     }
 
     const unsubscribe = onAuthStateChangedListener(async (u) => {
-      const isInitialLoad = user === null;
       setUser(u);
       
       if (u) {
         loadGreetings(u.uid);
-        // CRITICAL FIX: Only change state to GALLERY if we are currently at the AUTH landing screen.
-        // This prevents the app from "starting over" when the auth state listener triggers during other activities.
+        // CRITICAL: Only transition to GALLERY if we are currently at the AUTH screen.
+        // This prevents the app from resetting state during generation or while on the creator.
         setAppState(prev => {
           if (prev === AppState.AUTH) return AppState.GALLERY;
           return prev;
@@ -54,7 +53,7 @@ const App: React.FC = () => {
   };
 
   const handleGenerate = async (params: GenerateGreetingParams) => {
-    // Check for AI Studio environment and API Key selection
+    // 1. Check for AI Studio environment and API Key selection
     if (window.aistudio) {
       if (!(await window.aistudio.hasSelectedApiKey())) {
         setShowApiKeyDialog(true);
@@ -62,18 +61,7 @@ const App: React.FC = () => {
       }
     }
 
-    // Safety check for API Key before calling the SDK to avoid vague browser errors
-    if (!process.env.API_KEY) {
-      console.warn("API Key is missing from process.env.API_KEY");
-      if (window.aistudio) {
-        await window.aistudio.openSelectKey();
-        return;
-      } else {
-        alert("API Key is missing. Please ensure your environment is configured correctly.");
-        return;
-      }
-    }
-
+    // 2. Start generation flow
     setIsLoading(true);
     setAppState(AppState.LOADING);
     
@@ -102,19 +90,21 @@ const App: React.FC = () => {
     } catch (e: any) {
       console.error("Video Generation Error:", e);
       
-      // Handle missing entity error by prompting for key again as per guidelines
-      if (e.message?.includes("Requested entity was not found") || e.message?.includes("API Key must be set")) {
+      // Handle missing entity or key errors by prompting for key again as per guidelines
+      const errorMessage = e.message || "Unknown error";
+      if (errorMessage.includes("Requested entity was not found") || 
+          errorMessage.includes("API Key") || 
+          errorMessage.includes("not set")) {
         if (window.aistudio) {
           await window.aistudio.openSelectKey();
-          // After opening the dialog, we stay in IDLE so they can try again once key is picked
         } else {
-          alert(`Configuration Error: ${e.message}`);
+          alert(`Configuration Error: ${errorMessage}. Please check your API Key.`);
         }
       } else {
-        alert("Failed to generate greeting: " + (e.message || "Unknown error occurred."));
+        alert("Failed to generate greeting: " + errorMessage);
       }
       
-      // On error, return to creator mode instead of resetting to AUTH/GALLERY
+      // Return to IDLE state so the user can see the form again (which is preserved via 'hidden' class)
       setAppState(AppState.IDLE);
     } finally {
       setIsLoading(false);
@@ -136,7 +126,8 @@ const App: React.FC = () => {
     setShowApiKeyDialog(false);
     if (window.aistudio) {
       await window.aistudio.openSelectKey();
-      // Proceed logic: after triggering dialog, assume success as per race condition notes
+      // Proceed logic: after triggering dialog, guidelines say to assume success and proceed.
+      // We stay on the IDLE state so the user can click the generate button again.
     }
   };
 
@@ -230,9 +221,14 @@ const App: React.FC = () => {
           />
         )}
 
-        {appState === AppState.IDLE && (
+        {/* 
+          CRITICAL: We use 'hidden' class instead of conditional mounting {appState === AppState.IDLE && ...}
+          to preserve the GreetingCreator's internal form state when transitioning to LOADING/SUCCESS/ERROR.
+          This prevents the "start over" bug where users lose their message if something fails.
+        */}
+        <div className={(appState === AppState.IDLE) ? "w-full flex justify-center" : "hidden"}>
           <GreetingCreator onGenerate={handleGenerate} />
-        )}
+        </div>
 
         {appState === AppState.LOADING && <LoadingIndicator />}
 

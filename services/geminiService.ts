@@ -9,10 +9,12 @@ import { GenerateGreetingParams, VoiceGender, VeoModel } from '../types';
 export const generateGreetingVideo = async (
   params: GenerateGreetingParams
 ): Promise<{ objectUrl: string; blob: Blob }> => {
-  // Fix: Always use the mandated initialization pattern with process.env.API_KEY directly
+  // Mandated pattern: Create instance right before the call using process.env.API_KEY directly.
+  // This ensures we pick up keys injected after window.aistudio.openSelectKey() is called.
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-  // Use the advanced Veo model if a reference photo is provided, as it is required for asset-based generation
+  // Use the advanced Veo model if a reference photo is provided, as it is required for asset-based generation.
+  // Otherwise, use the user-selected or default model.
   const modelToUse = params.userPhoto ? 'veo-3.1-generate-preview' : params.model;
 
   const cinematicPrompt = `
@@ -23,7 +25,7 @@ export const generateGreetingVideo = async (
     Context of the message: ${params.message.substring(0, 300)}
   `.trim();
 
-  // Reference images (ASSET type) require 16:9 aspect ratio and 720p resolution as per requirements
+  // Reference images (ASSET type) require 16:9 aspect ratio and 720p resolution for the current API version.
   const config: any = {
     numberOfVideos: 1,
     resolution: '720p',
@@ -66,6 +68,7 @@ export const generateGreetingVideo = async (
     }
   } catch (error: any) {
     console.error("Gemini API Error details:", error);
+    // Rethrow to be caught by App.tsx handleGenerate which manages the UI and picker flow.
     throw error;
   }
 
@@ -73,7 +76,7 @@ export const generateGreetingVideo = async (
 };
 
 export const generateGreetingVoice = async (text: string, voice: VoiceGender): Promise<string | null> => {
-  // Fix: Standardize initialization according to guidelines
+  // Mandated pattern: Create instance right before the call.
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const voiceMap: Record<VoiceGender, string> = {
@@ -97,8 +100,7 @@ export const generateGreetingVoice = async (text: string, voice: VoiceGender): P
     });
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    // Note: TTS returns raw PCM data; consumers need to decode it accordingly.
-    // In this app, we just return the base64-prefixed data if needed.
+    // Note: TTS returns raw PCM data.
     return base64Audio ? `data:audio/pcm;base64,${base64Audio}` : null;
   } catch (e) {
     console.error("Voice Generation failed:", e);
