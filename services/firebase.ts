@@ -1,8 +1,11 @@
 
 // Fix: Consolidate modular imports and ensure type exports are correctly handled
-import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, type Auth } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, orderBy, type Firestore } from 'firebase/firestore';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import type { FirebaseApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import type { Auth, User } from 'firebase/auth';
+import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, orderBy } from 'firebase/firestore';
+import type { Firestore } from 'firebase/firestore';
 import { GreetingRecord } from '../types';
 
 // Provided Firebase configuration
@@ -76,6 +79,12 @@ export const logout = async () => {
   if (auth) {
     await signOut(auth);
   }
+};
+
+// Fix: Export a listener wrapper to ensure correct modular Firebase usage
+export const onAuthStateChangedListener = (callback: (user: User | null) => void) => {
+  if (!auth) return () => {};
+  return onAuthStateChanged(auth, callback);
 };
 
 export const saveGreeting = async (userId: string, greeting: Omit<GreetingRecord, 'id'>) => {

@@ -1,32 +1,37 @@
+
 import {
   GoogleGenAI,
   Modality,
-  VideoGenerationReferenceImage,
   VideoGenerationReferenceType,
 } from '@google/genai';
-import { GenerateGreetingParams, VoiceGender } from '../types';
+import { GenerateGreetingParams, VoiceGender, VeoModel } from '../types';
 
 export const generateGreetingVideo = async (
   params: GenerateGreetingParams
 ): Promise<{ objectUrl: string; blob: Blob }> => {
+  // Use a fresh instance right before the call to ensure the latest API key is used
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+  // Use the advanced Veo model if a reference photo is provided, as it is required for asset-based generation
+  const modelToUse = params.userPhoto ? 'veo-3.1-generate-preview' : params.model;
 
   const cinematicPrompt = `
     A cinematic, high-quality holiday greeting video for ${params.occasion}.
     Visual Theme: ${params.theme}. 
     Atmosphere: Joyful, celebratory, 8k resolution, professional lighting.
     The video should feel personal and warm. 
-    Context: ${params.message.substring(0, 200)}...
+    Context: ${params.message.substring(0, 300)}
   `.trim();
 
+  // Reference images (ASSET type) require 16:9 aspect ratio and 720p resolution
   const config: any = {
     numberOfVideos: 1,
     resolution: '720p',
-    aspectRatio: params.aspectRatio,
+    aspectRatio: params.userPhoto ? '16:9' : params.aspectRatio,
   };
 
   const payload: any = {
-    model: params.model,
+    model: modelToUse,
     prompt: cinematicPrompt,
     config: config,
   };
@@ -35,28 +40,36 @@ export const generateGreetingVideo = async (
     payload.config.referenceImages = [{
       image: {
         imageBytes: params.userPhoto.base64,
-        mimeType: params.userPhoto.file.type,
+        mimeType: params.userPhoto.file.type || 'image/jpeg',
       },
       referenceType: VideoGenerationReferenceType.ASSET,
     }];
   }
 
-  let operation = await ai.models.generateVideos(payload);
+  try {
+    let operation = await ai.models.generateVideos(payload);
 
-  while (!operation.done) {
-    await new Promise((resolve) => setTimeout(resolve, 10000));
-    operation = await ai.operations.getVideosOperation({ operation: operation });
+    // Poll until completion with reassuring intervals
+    while (!operation.done) {
+      await new Promise((resolve) => setTimeout(resolve, 10000));
+      operation = await ai.operations.getVideosOperation({ operation: operation });
+    }
+
+    if (operation?.response?.generatedVideos?.[0]?.video?.uri) {
+      const videoUri = operation.response.generatedVideos[0].video.uri;
+      // Fetch the binary data using the authenticated download link
+      const res = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
+      if (!res.ok) throw new Error('Failed to fetch the final video bytes');
+      
+      const blob = await res.blob();
+      return { objectUrl: URL.createObjectURL(blob), blob };
+    }
+  } catch (error: any) {
+    console.error("Gemini API Error:", error);
+    throw error;
   }
 
-  if (operation?.response?.generatedVideos?.[0]?.video?.uri) {
-    const videoUri = operation.response.generatedVideos[0].video.uri;
-    const res = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
-    if (!res.ok) throw new Error('Failed to fetch generated video');
-    const blob = await res.blob();
-    return { objectUrl: URL.createObjectURL(blob), blob };
-  }
-
-  throw new Error('Video generation failed');
+  throw new Error('Video generation failed to return a valid operation response');
 };
 
 export const generateGreetingVoice = async (text: string, voice: VoiceGender): Promise<string | null> => {
@@ -83,9 +96,10 @@ export const generateGreetingVoice = async (text: string, voice: VoiceGender): P
     });
 
     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    // Note: TTS returns raw PCM data; consumers need to decode it accordingly
     return base64Audio ? `data:audio/pcm;base64,${base64Audio}` : null;
   } catch (e) {
-    console.error("TTS failed", e);
+    console.error("Voice Generation failed:", e);
     return null;
   }
 };
