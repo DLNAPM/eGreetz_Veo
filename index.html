@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -5,7 +6,7 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>eGreetz - Cinematic AI Greetings</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Removed CDN tailwind script for production optimization -->
     <script type="importmap">
 {
   "imports": {
@@ -20,7 +21,9 @@
     "firebase/app": "https://esm.sh/firebase@10.8.0/app",
     "firebase/auth": "https://esm.sh/firebase@10.8.0/auth?deps=firebase@10.8.0",
     "firebase/firestore": "https://esm.sh/firebase@10.8.0/firestore?deps=firebase@10.8.0",
-    "firebase/": "https://esm.sh/firebase@^12.7.0/"
+    "@firebase/auth": "https://esm.sh/@firebase/auth@^1.12.0",
+    "@firebase/app": "https://esm.sh/@firebase/app@^0.14.6",
+    "@firebase/firestore": "https://esm.sh/@firebase/firestore@^4.9.3"
   }
 }
 </script>

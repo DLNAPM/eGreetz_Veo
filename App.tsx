@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-// Fix: Use standard named import for User to ensure compatibility and resolve "no exported member" errors in varying environments
-import { User } from 'firebase/auth';
+// Using import type for User to ensure compatibility and resolve "no exported member" errors in varying environments
+// Fix: Import from @firebase/auth directly as it provides the actual type definitions that sometimes fail to export through the top-level wrapper.
+import type { User } from '@firebase/auth';
 import { auth, loginWithGoogle, logout, getUserGreetings, saveGreeting, deleteGreeting, isFirebaseEnabled, onAuthStateChangedListener } from './services/firebase';
 import { AppState, GenerateGreetingParams, GreetingRecord, Occasion, GreetingTheme, VoiceGender, VeoModel, AspectRatio } from './types';
 import GreetingCreator from './components/GreetingCreator';
@@ -102,7 +103,7 @@ const App: React.FC = () => {
         // As per guidelines, if key selection is requested, trigger openSelectKey()
         await window.aistudio.openSelectKey();
       } else if (isApiKeyError) {
-        alert("Authentication Error: The API Key is missing or invalid. Please ensure it is correctly set in your environment variables (e.g., using VITE_ prefix if necessary for your hosting).");
+        alert("Authentication Error: The Gemini API Key is missing or invalid. Please ensure it is correctly set in your Render.com environment variables.");
       } else {
         alert("Failed to generate greeting: " + errorMessage);
       }
