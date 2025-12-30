@@ -1,13 +1,8 @@
 
-
-// Fix: Consolidate modular imports and separate value/type declarations to ensure maximum compatibility and avoid "no exported member" errors in varying environments
-// Direct imports from @firebase/app, @firebase/auth, and @firebase/firestore ensure that types and values are correctly resolved when the top-level 'firebase' package exhibits issues.
-import { initializeApp, getApps, getApp } from '@firebase/app';
-import type { FirebaseApp } from '@firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from '@firebase/auth';
-import type { Auth, User } from '@firebase/auth';
-import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, orderBy } from '@firebase/firestore';
-import type { Firestore } from '@firebase/firestore';
+// Fix: Consolidate modular imports into single lines with inline type declarations to resolve "no exported member" errors during build
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, type Auth, type User } from 'firebase/auth';
+import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, orderBy, type Firestore } from 'firebase/firestore';
 import { GreetingRecord } from '../types';
 
 // Provided Firebase configuration

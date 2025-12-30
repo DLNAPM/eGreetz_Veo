@@ -1,33 +1,38 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: dark;
-}
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
 
-body {
-  margin: 0;
-  background-color: #0a0a0c;
-  color: #fff;
-  -webkit-font-smoothing: antialiased;
+  body {
+    margin: 0;
+    background-color: #000000;
+    color: #ffffff;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0a0a0c;
+  background: #000000;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1f1f23;
-  border-radius: 4px;
+  background: #1a1a1f;
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #2c2c31;
+  background: #25252b;
 }
 
 .line-clamp-2 {
@@ -35,4 +40,37 @@ body {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Animations */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-in {
+  animation-duration: 0.5s;
+  animation-fill-mode: forwards;
+}
+
+.fade-in {
+  animation-name: fade-in;
+}
+
+.slide-in-from-bottom-4 {
+  animation-name: slide-up;
+}
+
+.zoom-in {
+  animation: zoom-in 0.5s ease-out;
+}
+
+@keyframes zoom-in {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
 }

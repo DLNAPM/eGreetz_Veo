@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { Occasion, GreetingTheme, VoiceGender, GenerateGreetingParams, ImageFile, VeoModel, AspectRatio } from '../types';
 import { Mic, Upload, X, Sparkles, Wand2 } from 'lucide-react';
@@ -28,7 +29,7 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate }) => {
   };
 
   const startSpeechRecognition = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitRecognition;
     if (!SpeechRecognition) {
       alert("Your browser doesn't support speech recognition.");
       return;
@@ -46,23 +47,24 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate }) => {
   };
 
   return (
-    <div className="w-full max-w-3xl bg-[#111114] border border-white/10 rounded-3xl p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="w-full max-w-4xl bg-black border border-white/10 rounded-3xl p-8 md:p-12 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.8)] animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="mb-10">
-        <h2 className="text-3xl font-bold mb-2 flex items-center gap-3">
-          <Sparkles className="text-indigo-400" /> Create Your Greeting
+        <h2 className="text-4xl font-bold mb-2 flex items-center gap-3 text-white">
+          <Sparkles className="text-indigo-500 w-8 h-8" /> Create Your Greeting
         </h2>
-        <p className="text-gray-400">Set the occasion and let AI bring your message to life.</p>
+        <p className="text-gray-400 text-lg">Set the occasion and let AI bring your message to life.</p>
       </div>
 
-      <div className="space-y-8">
+      <div className="space-y-10">
+        {/* Occasion Section - 3 Columns */}
         <div>
-          <label className="block text-sm font-medium text-gray-400 mb-3 uppercase tracking-wider">The Occasion</label>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <label className="block text-xs font-bold text-gray-500 mb-4 uppercase tracking-[0.2em]">The Occasion</label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             {Object.values(Occasion).map(occ => (
               <button
                 key={occ}
                 onClick={() => setOccasion(occ)}
-                className={`p-3 rounded-xl border text-sm transition-all text-left ${occasion === occ ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'}`}
+                className={`px-5 py-4 rounded-xl border text-sm font-semibold transition-all text-left ${occasion === occ ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20' : 'bg-[#0a0a0c] border-white/5 text-gray-400 hover:bg-gray-800'}`}
               >
                 {occ}
               </button>
@@ -70,73 +72,76 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate }) => {
           </div>
         </div>
 
+        {/* Message Section */}
         <div>
           <div className="flex justify-between items-center mb-3">
-            <label className="text-sm font-medium text-gray-400 uppercase tracking-wider">Your Message</label>
-            <span className="text-xs text-gray-500">{message.split(/\s+/).filter(w => w.length > 0).length} / 1000 words</span>
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-[0.2em]">Your Message</label>
+            <span className="text-xs font-medium text-gray-600">{message.length} / 1000 words</span>
           </div>
           <div className="relative">
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder="What do you want to say?"
-              className="w-full h-32 bg-white/5 border border-white/10 rounded-2xl p-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
-              maxLength={5000}
+              className="w-full h-44 bg-[#0a0a0c] border border-white/5 rounded-2xl p-6 text-white text-lg placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-600 transition-all resize-none shadow-inner"
+              maxLength={1000}
             />
             <button
               onClick={startSpeechRecognition}
-              className={`absolute bottom-4 right-4 p-3 rounded-full transition-all ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-white/10 hover:bg-white/20'}`}
-              title="Speak your message"
+              className={`absolute bottom-4 right-4 p-3 rounded-full transition-all shadow-xl ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-gray-800 hover:bg-gray-700 text-gray-300'}`}
             >
-              <Mic size={20} />
+              <Mic size={24} />
             </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* Media and Character Section - 2 Columns */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+          {/* Left Column: Photo */}
           <div>
-            <label className="block text-sm font-medium text-gray-400 mb-3 uppercase tracking-wider">Your Photo (Optional)</label>
+            <label className="block text-xs font-bold text-gray-500 mb-4 uppercase tracking-[0.2em]">Your Photo (Optional)</label>
             {photo ? (
-              <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-white/10 group">
+              <div className="relative w-full aspect-video rounded-2xl overflow-hidden border border-white/5 group">
                 <img src={URL.createObjectURL(photo.file)} alt="Preview" className="w-full h-full object-cover" />
                 <button 
                   onClick={() => setPhoto(null)}
-                  className="absolute top-2 right-2 p-2 bg-black/60 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute top-3 right-3 p-2 bg-black/60 rounded-full text-white hover:bg-red-500 transition-colors"
                 >
-                  <X size={16} />
+                  <X size={18} />
                 </button>
               </div>
             ) : (
               <button 
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full aspect-video bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center gap-3 text-gray-500 hover:text-white hover:bg-white/10 hover:border-indigo-500/50 transition-all"
+                className="w-full aspect-video bg-[#0a0a0c] border-2 border-dashed border-white/5 rounded-2xl flex flex-col items-center justify-center gap-3 text-gray-500 hover:text-indigo-400 hover:bg-[#121214] transition-all"
               >
-                <Upload size={32} />
-                <span>Upload Profile Image</span>
+                <Upload size={40} />
+                <span className="font-semibold text-sm">Upload Profile Image</span>
               </button>
             )}
             <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} />
           </div>
 
-          <div className="space-y-6">
+          {/* Right Column: Voice and Theme */}
+          <div className="space-y-10">
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-3 uppercase tracking-wider">Voice Character</label>
+              <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Voice Character</label>
               <select 
                 value={voice}
                 onChange={(e) => setVoice(e.target.value as VoiceGender)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full bg-[#0a0a0c] border border-white/5 rounded-xl p-4 focus:outline-none focus:ring-2 focus:ring-indigo-600 text-white font-medium"
               >
-                {Object.values(VoiceGender).map(v => <option key={v} value={v} className="bg-[#111114]">{v}</option>)}
+                {Object.values(VoiceGender).map(v => <option key={v} value={v} className="bg-black">{v}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-400 mb-3 uppercase tracking-wider">Background Scene</label>
-              <div className="grid grid-cols-2 gap-2">
+              <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Background Scene</label>
+              <div className="grid grid-cols-2 gap-3">
                 {Object.values(GreetingTheme).map(t => (
                   <button
                     key={t}
                     onClick={() => setTheme(t)}
-                    className={`p-2 rounded-lg border text-xs transition-all ${theme === t ? 'bg-indigo-600/20 border-indigo-500 text-indigo-400' : 'bg-white/5 border-white/10 text-gray-500'}`}
+                    className={`px-4 py-3 rounded-xl border text-[11px] font-bold transition-all tracking-wider uppercase ${theme === t ? 'bg-indigo-600/20 border-indigo-500 text-indigo-400 shadow-lg shadow-indigo-500/5' : 'bg-[#0a0a0c] border-white/5 text-gray-600 hover:bg-gray-800'}`}
                   >
                     {t}
                   </button>
@@ -146,12 +151,13 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate }) => {
           </div>
         </div>
 
+        {/* Generate Button */}
         <button
           onClick={() => onGenerate({ occasion, message, theme, voice, userPhoto: photo, model: VeoModel.VEO_FAST, aspectRatio: AspectRatio.LANDSCAPE })}
           disabled={!message.trim()}
-          className="w-full py-5 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl font-bold text-xl flex items-center justify-center gap-3 hover:shadow-2xl hover:shadow-indigo-500/30 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full py-6 bg-indigo-600 rounded-2xl font-black text-xl flex items-center justify-center gap-4 hover:bg-indigo-500 transition-all active:scale-[0.99] disabled:opacity-30 disabled:cursor-not-allowed shadow-[0_20px_40px_-10px_rgba(79,70,229,0.4)] text-white"
         >
-          <Wand2 /> Generate Cinematic Greeting
+          <Wand2 size={28} /> Generate Cinematic Greeting
         </button>
       </div>
     </div>
