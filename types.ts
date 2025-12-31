@@ -16,14 +16,24 @@ export enum Occasion {
   ANNIVERSARY = 'Happy Anniversary',
   NEW_YEARS = 'Happy New Years',
   PROMOTION = 'Congratulations on your Promotion',
-  GRADUATION = 'Congratulations on your Graduation'
+  GRADUATION = 'Congratulations on your Graduation',
+  CONGRATULATIONS = 'Congratulations',
+  VALENTINES = 'Valentine\'s Day (Love & Romance)',
+  EASTER = 'Happy Easter (Resurrection & Spring)',
+  MOTHERS_DAY = 'Happy Mother\'s Day',
+  FATHERS_DAY = 'Happy Father\'s Day',
+  SYMPATHY = 'Deepest Sympathy (In Loving Memory)'
 }
 
 export enum GreetingTheme {
   BALLOONS = 'Balloons dropping',
   CHAMPAGNE = 'Champagne popping',
   FIREWORKS = 'Fireworks',
-  NOISE_MAKERS = 'Noise makers'
+  NOISE_MAKERS = 'Noise makers',
+  HEARTS = 'Floating Hearts & Roses',
+  FLOWERS = 'Blooming Spring Garden',
+  CANDLES = 'Serene Candlelight',
+  CONFETTI = 'Colorful Confetti'
 }
 
 export enum VoiceGender {
