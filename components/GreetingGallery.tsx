@@ -105,7 +105,7 @@ const GreetingGallery: React.FC<Props> = ({ greetings, receivedGreetings = [], o
           </div>
         </div>
 
-        {greetings.length === 0 ? (
+        {greetings.length === 0 && receivedGreetings.length === 0 ? (
           <div className="py-12 flex flex-col items-center justify-center border-2 border-dashed border-white/5 rounded-3xl bg-[#0a0a0c] text-center">
             <Clock size={32} className="text-gray-700 mb-4" />
             <p className="text-gray-500 text-sm mb-6">No videos in your cloud library.</p>
@@ -118,20 +118,25 @@ const GreetingGallery: React.FC<Props> = ({ greetings, receivedGreetings = [], o
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Display both created and received if combined view is preferred, 
+                but based on requirements we show them in their respective sections.
+                User specifically mentioned them not showing up in My Productions,
+                so we will list them together here but with appropriate labels. */}
             {greetings.map(g => renderCard(g, true))}
+            {receivedGreetings.map(g => renderCard(g, false))}
           </div>
         )}
       </section>
 
-      {/* Received Greetings Section */}
-      {receivedGreetings.length > 0 && (
+      {/* Explicit Received Greetings Section if there are many */}
+      {receivedGreetings.length > 5 && (
         <section>
           <div className="flex justify-between items-end mb-8 border-b border-white/5 pb-4">
             <div>
               <h2 className="text-3xl font-black tracking-tight flex items-center gap-3">
-                <Inbox className="text-purple-500" /> Received Cinematic Moments
+                <Inbox className="text-purple-500" /> Inbox
               </h2>
-              <p className="text-gray-500 text-sm">Greetings sent to you by other eGreetz users.</p>
+              <p className="text-gray-500 text-sm">Manage greetings received from others.</p>
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

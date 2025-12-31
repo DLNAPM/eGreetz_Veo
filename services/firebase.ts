@@ -4,7 +4,7 @@ import {
   initializeApp, 
   getApps, 
   getApp,
-  type FirebaseApp
+  type FirebaseApp 
 } from 'firebase/app';
 import { 
   getAuth, 
@@ -24,7 +24,6 @@ import {
   getDocs, 
   deleteDoc, 
   doc, 
-  orderBy,
   updateDoc,
   serverTimestamp,
   type Firestore
@@ -38,6 +37,7 @@ import {
 } from 'firebase/storage';
 import { GreetingRecord } from '../types';
 
+// Helper to get environment variables from either process.env or import.meta.env
 const getEnvVar = (key: string): string | undefined => {
   if (typeof process !== 'undefined' && process.env && process.env[key]) {
     return process.env[key];
@@ -49,6 +49,7 @@ const getEnvVar = (key: string): string | undefined => {
   return undefined;
 };
 
+// Parse Firebase configuration from environment
 const getFirebaseConfig = () => {
   const configStr = getEnvVar('VITE_FIREBASE_CONFIG');
   if (configStr) {
@@ -74,6 +75,7 @@ let auth: Auth | null = null;
 let db: Firestore | null = null;
 let storage: FirebaseStorage | null = null;
 
+// Initialize Firebase only if mandatory config is available
 if (firebaseConfig && firebaseConfig.apiKey) {
   try {
     if (getApps().length === 0) {
@@ -149,11 +151,13 @@ export const getUserGreetings = async (userId: string): Promise<GreetingRecord[]
   try {
     const q = query(
       collection(db, 'greetings'),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc')
+      where('userId', '==', userId)
     );
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GreetingRecord));
+    const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GreetingRecord));
+    
+    // Sort in memory to avoid needing composite indexes for simple userId filtering
+    return results.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   } catch (error) {
     console.error("Fetch greetings failed:", error);
     return [];
@@ -188,15 +192,21 @@ export const getReceivedGreetings = async (email: string): Promise<GreetingRecor
   try {
     const q = query(
       collection(db, 'shared_greetings'),
-      where('recipientEmail', '==', email.toLowerCase()),
-      orderBy('sharedAt', 'desc')
+      where('recipientEmail', '==', email.toLowerCase())
     );
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ 
+    const results = snapshot.docs.map(doc => ({ 
       id: doc.id, 
       ...doc.data(),
       isReceived: true // Flag to identify shared content in UI
     } as any));
+
+    // Sort in memory by sharedAt (handle Firestore timestamp object or numeric value)
+    return results.sort((a, b) => {
+      const timeA = a.sharedAt?.toMillis?.() || a.sharedAt || a.createdAt || 0;
+      const timeB = b.sharedAt?.toMillis?.() || b.sharedAt || b.createdAt || 0;
+      return timeB - timeA;
+    });
   } catch (error) {
     console.error("Fetch shared failed:", error);
     return [];

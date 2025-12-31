@@ -21,7 +21,7 @@ import GreetingResult from './components/GreetingResult';
 import LoadingIndicator from './components/LoadingIndicator';
 import ApiKeyDialog from './components/ApiKeyDialog';
 import HelpModal from './components/HelpModal';
-import { LogIn, LogOut, Plus, ShieldCheck, Key, AlertCircle, HelpCircle } from 'lucide-react';
+import { LogIn, LogOut, Plus, ShieldCheck, Key, AlertCircle, HelpCircle, RefreshCw } from 'lucide-react';
 import { generateGreetingVideo, generateGreetingVoice } from './services/geminiService';
 
 const App: React.FC = () => {
@@ -70,12 +70,22 @@ const App: React.FC = () => {
   }, [appState]);
 
   const loadData = async (u: User) => {
-    const [mine, received] = await Promise.all([
-      getUserGreetings(u.uid),
-      u.email ? getReceivedGreetings(u.email) : Promise.resolve([])
-    ]);
-    setMyGreetings(mine);
-    setReceivedGreetings(received);
+    try {
+      const [mine, received] = await Promise.all([
+        getUserGreetings(u.uid),
+        u.email ? getReceivedGreetings(u.email) : Promise.resolve([])
+      ]);
+      setMyGreetings(mine);
+      setReceivedGreetings(received);
+    } catch (err) {
+      console.error("Failed to load user data:", err);
+    }
+  };
+
+  const handleRefresh = () => {
+    if (user) {
+      loadData(user);
+    }
   };
 
   const handleGenerate = async (params: GenerateGreetingParams & { extended: boolean }) => {
@@ -217,7 +227,7 @@ const App: React.FC = () => {
     if (!currentResult?.record || !user) return;
     try {
       await sendToInternalUser(user.displayName || "A Friend", email, currentResult.record);
-      alert("Sent! This greeting will appear in their 'Received' inbox.");
+      alert("Sent! This greeting will appear in their library shortly.");
     } catch (err: any) {
       alert("Internal share failed: " + err.message);
     }
@@ -260,6 +270,15 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-4">
+          {user && (
+            <button 
+              onClick={handleRefresh}
+              className="p-2 text-gray-400 hover:text-white transition-colors"
+              title="Refresh Library"
+            >
+              <RefreshCw size={20} className={isLoading ? 'animate-spin' : ''} />
+            </button>
+          )}
           <button 
             onClick={() => setShowHelpModal(true)}
             className="p-2 text-gray-400 hover:text-white transition-colors"
