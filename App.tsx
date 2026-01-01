@@ -179,12 +179,18 @@ const App: React.FC = () => {
       setAppState(AppState.SUCCESS);
     } catch (e: any) {
       console.error("Production Error:", e);
-      if (e.message?.includes("Requested entity was not found")) {
+      const errorMsg = e.toString();
+      
+      if (errorMsg.includes("429") || errorMsg.toLowerCase().includes("quota") || errorMsg.toLowerCase().includes("limit exceeded")) {
+        alert("Daily Production Quota Reached: Your Google Cloud project has hit its limit for today. You can request more in the Cloud Console > IAM & Admin > Quotas or wait until it resets at midnight.");
+      } else if (errorMsg.includes("Requested entity was not found")) {
         setIsKeyConnected(false);
         if (window.aistudio) await window.aistudio.openSelectKey();
+      } else {
+        alert("Production Error: " + errorMsg);
       }
-      alert("Production Error: " + e.toString());
-      setAppState(AppState.IDLE);
+      
+      setAppState(user ? AppState.GALLERY : AppState.IDLE);
     } finally {
       setIsLoading(false);
     }

@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { GenerateGreetingParams, GreetingRecord } from '../types';
-import { RefreshCw, LayoutGrid, Share2, Copy, Mail, MessageSquare, Check, Plus, Globe, Volume2 } from 'lucide-react';
+import { RefreshCw, LayoutGrid, Share2, Copy, Mail, MessageSquare, Check, Plus, Globe, Volume2, Share } from 'lucide-react';
 
 interface Props {
   result: { url: string; params: GenerateGreetingParams; record?: GreetingRecord; audioUrl?: string };
@@ -12,11 +12,25 @@ interface Props {
 
 const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInternalShare }) => {
   const [copied, setCopied] = useState(false);
+  const [canNativeShare, setCanNativeShare] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
 
   // Use the permanent HTTPS link provided by Firebase Storage
   const shareUrl = result.url;
+  const isCloudLink = shareUrl.startsWith('http');
+
+  useEffect(() => {
+    // Check if Web Share API is available
+    if (navigator.share && navigator.canShare) {
+      const shareData = {
+        title: 'eGreetz Cinematic Message',
+        text: `Check out this cinematic greeting I made for you:`,
+        url: shareUrl
+      };
+      setCanNativeShare(navigator.canShare(shareData));
+    }
+  }, [shareUrl]);
 
   // Sync Audio with Video playback
   useEffect(() => {
@@ -40,13 +54,28 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
   }, []);
 
   const handleCopy = () => {
-    // Force permanent URL and ensure no "blob:" prefix is copied
-    if (shareUrl.startsWith('blob:')) {
+    if (!isCloudLink) {
       alert("Note: This is a temporary local link. Log in to generate a permanent cloud link.");
     }
     navigator.clipboard.writeText(shareUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleNativeShare = async () => {
+    const shareData = {
+      title: 'eGreetz Cinematic Message',
+      text: `Check out this cinematic greeting I made for you!`,
+      url: shareUrl
+    };
+
+    try {
+      await navigator.share(shareData);
+    } catch (err) {
+      console.error("Share failed:", err);
+      // Fallback to SMS if share was cancelled or failed
+      handleSMS();
+    }
   };
 
   const handleEmail = () => {
@@ -57,8 +86,16 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
 
   const handleSMS = () => {
     const bodyText = `Check out this cinematic greeting I made for you: ${shareUrl}`;
-    // Standard format to ensure text goes into message body on iOS/Android
-    window.location.href = `sms:?&body=${encodeURIComponent(bodyText)}`;
+    
+    // Improved cross-platform SMS URI handling
+    // iOS requires '&body=' if no phone number is specified
+    // Android requires '?body='
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const smsUri = isIOS 
+      ? `sms:&body=${encodeURIComponent(bodyText)}` 
+      : `sms:?body=${encodeURIComponent(bodyText)}`;
+      
+    window.location.href = smsUri;
   };
 
   const handleInternalTrigger = () => {
@@ -94,11 +131,11 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
           <audio ref={audioRef} src={result.audioUrl} className="hidden" />
         )}
         
-        <div className="absolute top-4 right-4 flex items-center gap-2 bg-blue-600/80 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-white">
-          {shareUrl.startsWith('http') ? (
+        <div className={`absolute top-4 right-4 flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md ${isCloudLink ? 'bg-blue-600/80' : 'bg-yellow-600/80'}`}>
+          {isCloudLink ? (
             <><Globe size={10} /> Cloud Hosted</>
           ) : (
-            <><Volume2 size={10} /> Local Preview</>
+            <><Volume2 size={10} /> Local Preview Only</>
           )}
         </div>
       </div>
@@ -109,6 +146,15 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
             <Share2 size={24} className="text-blue-500" /> Share Masterpiece
           </h3>
           <div className="grid grid-cols-2 gap-4">
+            {canNativeShare && (
+              <button 
+                onClick={handleNativeShare}
+                className="col-span-2 flex items-center justify-center gap-3 p-5 bg-blue-600 text-white hover:bg-blue-500 rounded-2xl transition-all border border-blue-500/30 font-black text-sm uppercase tracking-widest"
+              >
+                <Share size={20} />
+                <span>Share via App</span>
+              </button>
+            )}
             <button 
               onClick={handleCopy}
               className="flex items-center justify-center gap-3 p-4 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/5 font-bold text-sm"
