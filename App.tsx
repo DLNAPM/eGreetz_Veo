@@ -174,7 +174,7 @@ const App: React.FC = () => {
         url: finalUrl, 
         params, 
         record: newRecord,
-        audioUrl: audioBase64 ? `data:audio/wav;base64,${audioBase64}` : undefined 
+        audioUrl: audioBase64 // Pass raw base64 for decoding in Result component
       });
       setAppState(AppState.SUCCESS);
     } catch (e: any) {

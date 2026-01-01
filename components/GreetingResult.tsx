@@ -10,11 +10,45 @@ interface Props {
   onInternalShare?: (email: string) => void;
 }
 
+// Helper functions for raw PCM decoding as per Gemini API requirements
+function decodeBase64(base64: string) {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+async function decodePCM(
+  data: Uint8Array,
+  ctx: AudioContext,
+  sampleRate: number,
+  numChannels: number,
+): Promise<AudioBuffer> {
+  const dataInt16 = new Int16Array(data.buffer);
+  const frameCount = dataInt16.length / numChannels;
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+
+  for (let channel = 0; channel < numChannels; channel++) {
+    const channelData = buffer.getChannelData(channel);
+    for (let i = 0; i < frameCount; i++) {
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+    }
+  }
+  return buffer;
+}
+
 const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInternalShare }) => {
   const [copied, setCopied] = useState(false);
   const [canNativeShare, setCanNativeShare] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
+  
+  // Audio state management
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioBufferRef = useRef<AudioBuffer | null>(null);
+  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
 
   // Use the permanent HTTPS link provided by Firebase Storage
   const shareUrl = result.url;
@@ -32,15 +66,78 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     }
   }, [shareUrl]);
 
+  // Handle Audio Initialization (Raw PCM decoding)
+  useEffect(() => {
+    if (!result.audioUrl) return;
+
+    const initAudio = async () => {
+      try {
+        // Create audio context
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        audioContextRef.current = ctx;
+
+        // Extract raw base64 data (strip data URI prefix if present)
+        const base64Data = result.audioUrl!.replace(/^data:audio\/wav;base64,/, '').replace(/^data:audio\/pcm;base64,/, '');
+        const bytes = decodeBase64(base64Data);
+        
+        // Decode raw PCM (Gemini TTS default: 24kHz, 1 channel)
+        const buffer = await decodePCM(bytes, ctx, 24000, 1);
+        audioBufferRef.current = buffer;
+      } catch (err) {
+        console.error("Audio decoding failed:", err);
+      }
+    };
+
+    initAudio();
+
+    return () => {
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+    };
+  }, [result.audioUrl]);
+
   // Sync Audio with Video playback
   useEffect(() => {
     const video = videoRef.current;
-    const audio = audioRef.current;
-    if (!video || !audio) return;
+    if (!video) return;
 
-    const onPlay = () => audio.play();
-    const onPause = () => audio.pause();
-    const onSeeked = () => { audio.currentTime = video.currentTime; };
+    const stopAudio = () => {
+      if (sourceNodeRef.current) {
+        try { sourceNodeRef.current.stop(); } catch (e) {}
+        sourceNodeRef.current = null;
+      }
+    };
+
+    const playAudio = (offset: number = 0) => {
+      stopAudio();
+      if (!audioContextRef.current || !audioBufferRef.current) return;
+
+      const ctx = audioContextRef.current;
+      const source = ctx.createBufferSource();
+      source.buffer = audioBufferRef.current;
+      source.connect(ctx.destination);
+      
+      // Start audio at the current video timestamp
+      // Offset must be within bounds [0, duration]
+      const startTime = Math.max(0, Math.min(offset, audioBufferRef.current.duration));
+      source.start(0, startTime);
+      sourceNodeRef.current = source;
+    };
+
+    const onPlay = () => {
+      if (audioContextRef.current?.state === 'suspended') {
+        audioContextRef.current.resume();
+      }
+      playAudio(video.currentTime);
+    };
+    
+    const onPause = () => stopAudio();
+    const onSeeked = () => {
+      if (!video.paused) {
+        playAudio(video.currentTime);
+      }
+    };
 
     video.addEventListener('play', onPlay);
     video.addEventListener('pause', onPause);
@@ -50,6 +147,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       video.removeEventListener('play', onPlay);
       video.removeEventListener('pause', onPause);
       video.removeEventListener('seeked', onSeeked);
+      stopAudio();
     };
   }, []);
 
@@ -73,7 +171,6 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       await navigator.share(shareData);
     } catch (err) {
       console.error("Share failed:", err);
-      // Fallback to SMS if share was cancelled or failed
       handleSMS();
     }
   };
@@ -86,10 +183,6 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
 
   const handleSMS = () => {
     const bodyText = `Check out this cinematic greeting I made for you: ${shareUrl}`;
-    
-    // Improved cross-platform SMS URI handling
-    // iOS requires '&body=' if no phone number is specified
-    // Android requires '?body='
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const smsUri = isIOS 
       ? `sms:&body=${encodeURIComponent(bodyText)}` 
@@ -125,11 +218,9 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
           controls 
           autoPlay 
           loop 
+          crossOrigin="anonymous"
           className="w-full h-full object-contain"
         />
-        {result.audioUrl && (
-          <audio ref={audioRef} src={result.audioUrl} className="hidden" />
-        )}
         
         <div className={`absolute top-4 right-4 flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md ${isCloudLink ? 'bg-blue-600/80' : 'bg-yellow-600/80'}`}>
           {isCloudLink ? (

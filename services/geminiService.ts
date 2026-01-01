@@ -137,7 +137,7 @@ export const generateGreetingVoice = async (text: string, voice: VoiceGender): P
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: `Speak this greeting message warmly but at a brisk, high-energy pace (around 160 words per minute): ${text}` }] }],
+      contents: [{ parts: [{ text: `Say warmly: ${text}` }] }],
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
