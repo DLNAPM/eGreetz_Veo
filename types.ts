@@ -22,7 +22,8 @@ export enum Occasion {
   EASTER = 'Happy Easter (Resurrection & Spring)',
   MOTHERS_DAY = 'Happy Mother\'s Day',
   FATHERS_DAY = 'Happy Father\'s Day',
-  SYMPATHY = 'Deepest Sympathy (In Loving Memory)'
+  SYMPATHY = 'Deepest Sympathy (In Loving Memory)',
+  THANK_YOU = 'Thank You'
 }
 
 export enum GreetingTheme {
@@ -33,7 +34,10 @@ export enum GreetingTheme {
   HEARTS = 'Floating Hearts & Roses',
   FLOWERS = 'Blooming Spring Garden',
   CANDLES = 'Serene Candlelight',
-  CONFETTI = 'Colorful Confetti'
+  CONFETTI = 'Colorful Confetti',
+  CLAPPING = 'Clapping and whistling',
+  BOY_BABY_SHOWER = 'Boy Baby Shower',
+  GIRL_BABY_SHOWER = 'Girl Baby Shower'
 }
 
 export enum VoiceGender {
