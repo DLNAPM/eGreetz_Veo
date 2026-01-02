@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { GenerateGreetingParams, GreetingRecord } from '../types';
-import { RefreshCw, LayoutGrid, Share2, Copy, Mail, MessageSquare, Check, Plus, Globe, Volume2, Share } from 'lucide-react';
+import { RefreshCw, LayoutGrid, Share2, Copy, Mail, MessageSquare, Check, Plus, Globe, Volume2, Share, Users } from 'lucide-react';
 
 interface Props {
   result: { url: string; params: GenerateGreetingParams; record?: GreetingRecord; audioUrl?: string };
@@ -59,7 +59,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     if (navigator.share && navigator.canShare) {
       const shareData = {
         title: 'eGreetz Cinematic Message',
-        text: `Check out this cinematic greeting I made for you:`,
+        text: `Check out this cinematic greeting I made for you!`,
         url: shareUrl
       };
       setCanNativeShare(navigator.canShare(shareData));
@@ -72,15 +72,10 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
 
     const initAudio = async () => {
       try {
-        // Create audio context
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
         audioContextRef.current = ctx;
-
-        // Extract raw base64 data (strip data URI prefix if present)
         const base64Data = result.audioUrl!.replace(/^data:audio\/wav;base64,/, '').replace(/^data:audio\/pcm;base64,/, '');
         const bytes = decodeBase64(base64Data);
-        
-        // Decode raw PCM (Gemini TTS default: 24kHz, 1 channel)
         const buffer = await decodePCM(bytes, ctx, 24000, 1);
         audioBufferRef.current = buffer;
       } catch (err) {
@@ -118,8 +113,6 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       source.buffer = audioBufferRef.current;
       source.connect(ctx.destination);
       
-      // Start audio at the current video timestamp
-      // Offset must be within bounds [0, duration]
       const startTime = Math.max(0, Math.min(offset, audioBufferRef.current.duration));
       source.start(0, startTime);
       sourceNodeRef.current = source;
@@ -170,7 +163,8 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     try {
       await navigator.share(shareData);
     } catch (err) {
-      console.error("Share failed:", err);
+      console.error("Native share failed:", err);
+      // Fallback only if native share is unavailable or fails
       handleSMS();
     }
   };
@@ -196,11 +190,28 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       alert("Internal sharing requires a permanent cloud record. Please log in.");
       return;
     }
-    const email = prompt("Enter the recipient's Google Account email address:");
-    if (email && email.includes('@') && onInternalShare) {
-      onInternalShare(email);
-    } else if (email) {
-      alert("Invalid email format.");
+    
+    const emailsInput = prompt("Enter recipient Google Account email addresses (separate multiple with commas):");
+    
+    if (emailsInput) {
+      // Split by comma, trim whitespace, and filter out empty or invalid strings
+      const emails = emailsInput.split(',')
+        .map(e => e.trim())
+        .filter(e => e.length > 0 && e.includes('@'));
+
+      if (emails.length === 0) {
+        alert("Please enter at least one valid email address.");
+        return;
+      }
+
+      // Process each recipient
+      emails.forEach(email => {
+        if (onInternalShare) {
+          onInternalShare(email);
+        }
+      });
+
+      alert(`Sharing initiated for ${emails.length} recipient(s). They will see this in their eGreetz library shortly.`);
     }
   };
 
@@ -240,10 +251,10 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
             {canNativeShare && (
               <button 
                 onClick={handleNativeShare}
-                className="col-span-2 flex items-center justify-center gap-3 p-5 bg-blue-600 text-white hover:bg-blue-500 rounded-2xl transition-all border border-blue-500/30 font-black text-sm uppercase tracking-widest"
+                className="col-span-2 flex items-center justify-center gap-3 p-5 bg-blue-600 text-white hover:bg-blue-500 rounded-2xl transition-all border border-blue-500/30 font-black text-sm uppercase tracking-widest shadow-lg shadow-blue-600/20"
               >
                 <Share size={20} />
-                <span>Share via App</span>
+                <span>Share via App / Group</span>
               </button>
             )}
             <button 
@@ -251,7 +262,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
               className="flex items-center justify-center gap-3 p-4 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/5 font-bold text-sm"
             >
               {copied ? <Check size={18} className="text-green-500" /> : <Copy size={18} />}
-              <span>{copied ? 'Copied' : 'Cloud Link'}</span>
+              <span>{copied ? 'Copied' : 'Copy Link'}</span>
             </button>
             <button 
               onClick={handleEmail}
@@ -265,16 +276,19 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
               className="flex items-center justify-center gap-3 p-4 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/5 font-bold text-sm"
             >
               <MessageSquare size={18} />
-              <span>Text SMS</span>
+              <span>Direct SMS</span>
             </button>
             <button 
               onClick={handleInternalTrigger}
-              className="flex items-center justify-center gap-3 p-4 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-2xl transition-all font-bold text-sm hover:bg-blue-600/30"
+              className="flex items-center justify-center gap-3 p-4 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-2xl transition-all font-bold text-sm hover:bg-blue-600/20"
             >
-              <Plus size={18} />
-              <span>Internal</span>
+              <Users size={18} />
+              <span>Group Invite</span>
             </button>
           </div>
+          <p className="mt-6 text-[11px] text-gray-500 text-center italic">
+            Tip: Use "Share via App" to send to group chats in iMessage, WhatsApp, or Messenger.
+          </p>
         </div>
 
         <div className="flex flex-col gap-4 justify-center">
