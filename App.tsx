@@ -88,7 +88,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleGenerate = async (params: GenerateGreetingParams & { extended: boolean }) => {
+  const handleGenerate = async (params: GenerateGreetingParams) => {
     if (!user) {
       alert("Please login with your Google Account to create and share cinematic greetings.");
       setAppState(AppState.AUTH);
@@ -107,10 +107,12 @@ const App: React.FC = () => {
     setAppState(AppState.LOADING);
     
     try {
+      // 1. Generate Voice (TTS)
       const voiceResult = await generateGreetingVoice(params.message, params.voice);
       const audioDuration = voiceResult?.duration || 7;
       const audioBase64 = voiceResult?.base64;
 
+      // 2. Generate Cinematic Video (Automatically extends if script is long or extended flag is set)
       const { blob } = await generateGreetingVideo({ 
         ...params, 
         audioDuration 
@@ -174,7 +176,7 @@ const App: React.FC = () => {
         url: finalUrl, 
         params, 
         record: newRecord,
-        audioUrl: audioBase64 // Pass raw base64 for decoding in Result component
+        audioUrl: audioBase64 
       });
       setAppState(AppState.SUCCESS);
     } catch (e: any) {
@@ -223,7 +225,8 @@ const App: React.FC = () => {
         voice: greeting.voice || VoiceGender.FEMALE, 
         userPhoto: null,
         model: VeoModel.VEO_FAST,
-        aspectRatio: AspectRatio.LANDSCAPE
+        aspectRatio: AspectRatio.LANDSCAPE,
+        extended: false
       }
     });
     setAppState(AppState.SUCCESS);

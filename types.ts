@@ -97,6 +97,7 @@ export interface GenerateGreetingParams {
   userPhoto: ImageFile | null;
   model: VeoModel;
   aspectRatio: AspectRatio;
+  extended: boolean;
 }
 
 export interface GenerateVideoParams {

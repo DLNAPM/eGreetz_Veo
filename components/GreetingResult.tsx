@@ -27,7 +27,9 @@ async function decodePCM(
   sampleRate: number,
   numChannels: number,
 ): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer);
+  // Ensure the underlying buffer is handled safely for 16-bit conversion
+  const bufferCopy = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+  const dataInt16 = new Int16Array(bufferCopy);
   const frameCount = dataInt16.length / numChannels;
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
 
@@ -113,6 +115,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       source.buffer = audioBufferRef.current;
       source.connect(ctx.destination);
       
+      // We allow the audio to play from the specified offset to stay in sync with video seeks
       const startTime = Math.max(0, Math.min(offset, audioBufferRef.current.duration));
       source.start(0, startTime);
       sourceNodeRef.current = source;
@@ -135,11 +138,14 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     video.addEventListener('play', onPlay);
     video.addEventListener('pause', onPause);
     video.addEventListener('seeked', onSeeked);
+    // Handle the video reaching the end/looping
+    video.addEventListener('ended', onPause);
 
     return () => {
       video.removeEventListener('play', onPlay);
       video.removeEventListener('pause', onPause);
       video.removeEventListener('seeked', onSeeked);
+      video.removeEventListener('ended', onPause);
       stopAudio();
     };
   }, []);
@@ -164,7 +170,6 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       await navigator.share(shareData);
     } catch (err) {
       console.error("Native share failed:", err);
-      // Fallback only if native share is unavailable or fails
       handleSMS();
     }
   };
@@ -194,7 +199,6 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     const emailsInput = prompt("Enter recipient Google Account email addresses (separate multiple with commas):");
     
     if (emailsInput) {
-      // Split by comma, trim whitespace, and filter out empty or invalid strings
       const emails = emailsInput.split(',')
         .map(e => e.trim())
         .filter(e => e.length > 0 && e.includes('@'));
@@ -204,7 +208,6 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
         return;
       }
 
-      // Process each recipient
       emails.forEach(email => {
         if (onInternalShare) {
           onInternalShare(email);

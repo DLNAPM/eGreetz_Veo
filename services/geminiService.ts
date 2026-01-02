@@ -79,14 +79,17 @@ export const generateGreetingVideo = async (
 
     let finalVideo = operation.response?.generatedVideos?.[0]?.video;
     
-    // Extend video if audio duration exceeds standard 7s length
-    const targetDuration = (params.audioDuration || 0) + 2.5;
-    const currentDuration = 7;
-
-    if (targetDuration > currentDuration && finalVideo) {
+    // Extend video if audio duration exceeds standard 7s length OR if "Director's Cut" is selected
+    // We add 2 seconds of padding to ensure the audio isn't cut off by timing variances
+    const targetDuration = (params.audioDuration || 0) + 2;
+    const standardDuration = 7;
+    
+    // If user explicitly asked for Director's Cut (params.extended) 
+    // OR the audio script is longer than standard 7s production.
+    if ((params.extended || targetDuration > standardDuration) && finalVideo) {
       const extensionPayload = {
         model: 'veo-3.1-generate-preview',
-        prompt: `The celebration reaches its cinematic peak for ${params.occasion}, keeping the same visual style and environment.`,
+        prompt: `Continue the cinematic celebration for ${params.occasion}. The scene evolves beautifully while maintaining the same style, environment, and characters. Highly detailed celebratory atmosphere.`,
         video: finalVideo,
         config: {
           numberOfVideos: 1,
