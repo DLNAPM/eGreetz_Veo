@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { X, Info, Play, Star, ShieldAlert, HelpCircle } from 'lucide-react';
+import { X, Info, Play, Star, ShieldAlert, HelpCircle, Sparkles, Zap, LayoutGrid } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -32,70 +32,70 @@ const HelpModal: React.FC<Props> = ({ isOpen, onClose }) => {
         <div className="max-h-[85vh] overflow-y-auto p-8 sm:p-12 custom-scrollbar">
           <header className="mb-10 text-center">
             <div className="inline-flex p-4 bg-blue-600/20 rounded-2xl text-blue-500 mb-6">
-              <HelpCircle size={32} />
+              <Sparkles size={32} />
             </div>
-            <h2 className="text-4xl font-black tracking-tighter text-white">eGreetz Studio Guide</h2>
-            <p className="text-gray-400 mt-2">Everything you need to know about cinematic production.</p>
+            <h2 className="text-4xl font-black tracking-tighter text-white">Production Studio Updates</h2>
+            <p className="text-gray-400 mt-2">Latest cinematic tools and AI enhancements.</p>
           </header>
 
           <div className="space-y-12">
-            {/* About Section */}
+            {/* NEW FEATURES SECTION */}
+            <section>
+              <h3 className="text-xs font-black text-blue-500 uppercase tracking-[0.2em] mb-6">Latest Enhancements</h3>
+              <div className="grid grid-cols-1 gap-6">
+                
+                <div className="flex gap-5 p-5 bg-white/5 rounded-3xl border border-white/5">
+                  <div className="shrink-0 w-10 h-10 bg-purple-500/10 rounded-xl flex items-center justify-center text-purple-400">
+                    <Zap size={20} />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-bold text-white mb-1">Custom Scenic Descriptions</h4>
+                    <p className="text-sm text-gray-400 leading-relaxed">
+                      Beyond presets, you can now type a specific visual prompt. Our AI prioritizes your description to create truly unique environments like "Cyberpunk Tokyo" or "Floating Islands".
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-5 p-5 bg-white/5 rounded-3xl border border-white/5">
+                  <div className="shrink-0 w-10 h-10 bg-green-500/10 rounded-xl flex items-center justify-center text-green-400">
+                    <LayoutGrid size={20} />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-bold text-white mb-1">Optimized UI & Sorting</h4>
+                    <p className="text-sm text-gray-400 leading-relaxed">
+                      Occasions and Environments are now sorted alphabetically (A-Z) in sleek dropdown menus, making it easier to find "Hello", "Thank You", or "Baby Shower" presets.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-5 p-5 bg-white/5 rounded-3xl border border-white/5">
+                  <div className="shrink-0 w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-400">
+                    <Play size={20} />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-bold text-white mb-1">Perfect Audio-Visual Sync</h4>
+                    <p className="text-sm text-gray-400 leading-relaxed">
+                      The studio now analyzes your script length. If your message is long, the video duration automatically extends beyond 7s to ensure every word is heard clearly.
+                    </p>
+                  </div>
+                </div>
+
+              </div>
+            </section>
+
+            {/* Production Workflow */}
             <section className="flex gap-6">
               <div className="shrink-0 w-12 h-12 bg-indigo-500/10 rounded-xl flex items-center justify-center text-indigo-400">
                 <Info size={24} />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-white mb-2 tracking-tight">What is eGreetz?</h3>
-                <p className="text-gray-400 leading-relaxed">
-                  eGreetz is a state-of-the-art production studio that uses Google's Gemini and Veo AI models 
-                  to transform simple text into high-definition cinematic video greetings. We bridge the gap 
-                  between personal messages and professional film aesthetics.
-                </p>
-              </div>
-            </section>
-
-            {/* How to Use Section */}
-            <section className="flex gap-6">
-              <div className="shrink-0 w-12 h-12 bg-green-500/10 rounded-xl flex items-center justify-center text-green-400">
-                <Play size={24} />
-              </div>
-              <div>
                 <h3 className="text-xl font-bold text-white mb-2 tracking-tight">Production Workflow</h3>
-                <ol className="space-y-3 text-gray-400 list-decimal list-inside marker:text-blue-500 marker:font-black">
-                  <li><span className="ml-2">Select the celebration occasion.</span></li>
-                  <li><span className="ml-2">Write your script or use Voice-to-Text.</span></li>
-                  <li><span className="ml-2">Choose a narrator voice and atmospheric theme.</span></li>
-                  <li><span className="ml-2">Optionally upload a photo for AI visual reference.</span></li>
-                  <li><span className="ml-2">Generate and distribute via permanent cloud links.</span></li>
-                </ol>
-              </div>
-            </section>
-
-            {/* Features Section */}
-            <section className="flex gap-6">
-              <div className="shrink-0 w-12 h-12 bg-yellow-500/10 rounded-xl flex items-center justify-center text-yellow-400">
-                <Star size={24} />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-white mb-2 tracking-tight">Major Features</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                    <p className="text-xs font-black text-blue-500 uppercase tracking-widest mb-1">Cinematic Core</p>
-                    <p className="text-sm text-gray-300">Powered by Veo 3.1 for high-quality celebratory motion.</p>
-                  </div>
-                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                    <p className="text-xs font-black text-blue-500 uppercase tracking-widest mb-1">Dynamic Sync</p>
-                    <p className="text-sm text-gray-300">Video length automatically extends to fit your audio script.</p>
-                  </div>
-                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                    <p className="text-xs font-black text-blue-500 uppercase tracking-widest mb-1">Cloud Hosting</p>
-                    <p className="text-sm text-gray-300">Permanent Firebase hosting for global sharing without expiry.</p>
-                  </div>
-                  <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
-                    <p className="text-xs font-black text-blue-500 uppercase tracking-widest mb-1">Internal Share</p>
-                    <p className="text-sm text-gray-300">Send high-end greetings directly to other Google users.</p>
-                  </div>
-                </div>
+                <p className="text-gray-400 leading-relaxed text-sm">
+                  1. Choose a script occasion (now including "Hello" and "Thank You").<br/>
+                  2. Define the visual atmosphere via dropdown or Custom Scenic Description.<br/>
+                  3. Select a voice modulation (Tenor, Bass, or Female).<br/>
+                  4. Hit "Produce" to generate a cinematic masterpiece synced to your speech.
+                </p>
               </div>
             </section>
 
@@ -109,8 +109,7 @@ const HelpModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 <p className="text-sm text-gray-400 leading-relaxed italic">
                   eGreetz is intended for entertainment purposes only. Users are strictly prohibited from 
                   generating or sharing content that promotes illegal acts, terrorism, pornography, 
-                  exploitation, or abuse of any kind. Automated safety filters are active, and 
-                  violations may result in permanent account suspension.
+                  exploitation, or abuse of any kind. Automated safety filters are active.
                 </p>
               </div>
             </section>
@@ -119,7 +118,7 @@ const HelpModal: React.FC<Props> = ({ isOpen, onClose }) => {
           <div className="mt-12 text-center">
             <button 
               onClick={onClose}
-              className="px-10 py-4 bg-blue-600 text-white font-black rounded-2xl hover:bg-blue-500 transition-all uppercase tracking-widest text-sm"
+              className="px-10 py-4 bg-blue-600 text-white font-black rounded-2xl hover:bg-blue-500 transition-all uppercase tracking-widest text-sm shadow-[0_10px_30px_rgba(37,99,235,0.4)]"
             >
               Got it, let's create
             </button>

@@ -23,7 +23,8 @@ export enum Occasion {
   MOTHERS_DAY = 'Happy Mother\'s Day',
   FATHERS_DAY = 'Happy Father\'s Day',
   SYMPATHY = 'Deepest Sympathy (In Loving Memory)',
-  THANK_YOU = 'Thank You'
+  THANK_YOU = 'Thank You',
+  HELLO = 'Hello'
 }
 
 export enum GreetingTheme {
