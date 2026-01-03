@@ -1,10 +1,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { GenerateGreetingParams, GreetingRecord } from '../types';
-import { RefreshCw, LayoutGrid, Share2, Copy, Mail, MessageSquare, Check, Plus, Globe, Volume2, Share, Users } from 'lucide-react';
+import { RefreshCw, LayoutGrid, Share2, Copy, Mail, MessageSquare, Check, Plus, Globe, Volume2, Share, Users, Music } from 'lucide-react';
 
 interface Props {
-  result: { url: string; params: GenerateGreetingParams; record?: GreetingRecord; audioUrl?: string };
+  result: { url: string; params: GenerateGreetingParams; record?: GreetingRecord; audioUrl?: string; backgroundMusicUrl?: string };
   onRestart: () => void;
   onGoGallery: () => void;
   onInternalShare?: (email: string) => void;
@@ -50,7 +50,10 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
   // Audio state management
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
+  const musicBufferRef = useRef<AudioBuffer | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
+  const musicNodeRef = useRef<AudioBufferSourceNode | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
 
   // Use the permanent HTTPS link provided by Firebase Storage
   const shareUrl = result.url;
@@ -68,18 +71,33 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     }
   }, [shareUrl]);
 
-  // Handle Audio Initialization (Raw PCM decoding)
+  // Handle Audio Initialization (Raw PCM decoding for TTS and standard decoding for music)
   useEffect(() => {
-    if (!result.audioUrl) return;
-
     const initAudio = async () => {
       try {
-        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
         audioContextRef.current = ctx;
-        const base64Data = result.audioUrl!.replace(/^data:audio\/wav;base64,/, '').replace(/^data:audio\/pcm;base64,/, '');
-        const bytes = decodeBase64(base64Data);
-        const buffer = await decodePCM(bytes, ctx, 24000, 1);
-        audioBufferRef.current = buffer;
+
+        // Gain node to balance volumes
+        const gainNode = ctx.createGain();
+        gainNode.connect(ctx.destination);
+        gainNodeRef.current = gainNode;
+
+        // Load TTS
+        if (result.audioUrl) {
+          const base64Data = result.audioUrl.replace(/^data:audio\/wav;base64,/, '').replace(/^data:audio\/pcm;base64,/, '');
+          const bytes = decodeBase64(base64Data);
+          const buffer = await decodePCM(bytes, ctx, 24000, 1);
+          audioBufferRef.current = buffer;
+        }
+
+        // Load Background Music
+        if (result.backgroundMusicUrl) {
+          const response = await fetch(result.backgroundMusicUrl);
+          const arrayBuffer = await response.arrayBuffer();
+          const buffer = await ctx.decodeAudioData(arrayBuffer);
+          musicBufferRef.current = buffer;
+        }
       } catch (err) {
         console.error("Audio decoding failed:", err);
       }
@@ -92,7 +110,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
         audioContextRef.current.close();
       }
     };
-  }, [result.audioUrl]);
+  }, [result.audioUrl, result.backgroundMusicUrl]);
 
   // Sync Audio with Video playback
   useEffect(() => {
@@ -104,21 +122,44 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
         try { sourceNodeRef.current.stop(); } catch (e) {}
         sourceNodeRef.current = null;
       }
+      if (musicNodeRef.current) {
+        try { musicNodeRef.current.stop(); } catch (e) {}
+        musicNodeRef.current = null;
+      }
     };
 
     const playAudio = (offset: number = 0) => {
       stopAudio();
-      if (!audioContextRef.current || !audioBufferRef.current) return;
+      if (!audioContextRef.current) return;
 
       const ctx = audioContextRef.current;
-      const source = ctx.createBufferSource();
-      source.buffer = audioBufferRef.current;
-      source.connect(ctx.destination);
-      
-      // We allow the audio to play from the specified offset to stay in sync with video seeks
-      const startTime = Math.max(0, Math.min(offset, audioBufferRef.current.duration));
-      source.start(0, startTime);
-      sourceNodeRef.current = source;
+
+      // Play Background Music
+      if (musicBufferRef.current) {
+        const musicSource = ctx.createBufferSource();
+        musicSource.buffer = musicBufferRef.current;
+        musicSource.loop = true;
+        
+        // Connect to a dedicated gain for music if needed, currently using primary
+        const musicGain = ctx.createGain();
+        musicGain.gain.value = 0.5; // Lower music volume slightly for clarity
+        musicGain.connect(ctx.destination);
+        
+        const musicStartTime = Math.max(0, offset % musicBufferRef.current.duration);
+        musicSource.start(0, musicStartTime);
+        musicNodeRef.current = musicSource;
+      }
+
+      // Play TTS
+      if (audioBufferRef.current) {
+        const source = ctx.createBufferSource();
+        source.buffer = audioBufferRef.current;
+        source.connect(ctx.destination);
+        
+        const startTime = Math.max(0, Math.min(offset, audioBufferRef.current.duration));
+        source.start(0, startTime);
+        sourceNodeRef.current = source;
+      }
     };
 
     const onPlay = () => {
@@ -138,7 +179,6 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     video.addEventListener('play', onPlay);
     video.addEventListener('pause', onPause);
     video.addEventListener('seeked', onSeeked);
-    // Handle the video reaching the end/looping
     video.addEventListener('ended', onPause);
 
     return () => {
@@ -236,11 +276,18 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
           className="w-full h-full object-contain"
         />
         
-        <div className={`absolute top-4 right-4 flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md ${isCloudLink ? 'bg-blue-600/80' : 'bg-yellow-600/80'}`}>
-          {isCloudLink ? (
-            <><Globe size={10} /> Cloud Hosted</>
-          ) : (
-            <><Volume2 size={10} /> Local Preview Only</>
+        <div className="absolute top-4 right-4 flex flex-col gap-2 items-end">
+          <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md ${isCloudLink ? 'bg-blue-600/80' : 'bg-yellow-600/80'}`}>
+            {isCloudLink ? (
+              <><Globe size={10} /> Cloud Hosted</>
+            ) : (
+              <><Volume2 size={10} /> Local Preview Only</>
+            )}
+          </div>
+          {result.backgroundMusicUrl && (
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md bg-purple-600/80">
+              <Music size={10} /> Custom Audio
+            </div>
           )}
         </div>
       </div>

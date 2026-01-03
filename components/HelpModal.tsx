@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { X, Info, Play, Star, ShieldAlert, HelpCircle, Sparkles, Zap, LayoutGrid, MessageSquare, Camera, Share2, Target, Heart, Wind, PenTool } from 'lucide-react';
+import { X, Info, Play, Star, ShieldAlert, HelpCircle, Sparkles, Zap, LayoutGrid, MessageSquare, Camera, Share2, Target, Heart, Wind, PenTool, Music } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -32,7 +32,7 @@ const HelpModal: React.FC<Props> = ({ isOpen, onClose }) => {
         <div className="max-h-[85vh] overflow-y-auto p-8 sm:p-12 custom-scrollbar">
           <header className="mb-12 text-center">
             <div className="inline-flex p-4 bg-blue-600/20 rounded-2xl text-blue-500 mb-6">
-              <Star size={32} className="hidden" /> {/* Keep icon imports used via Star/Info/Heart if needed elsewhere, though usually best to remove unused ones. The user only reported Wind and PenTool missing. */}
+              <Star size={32} className="hidden" />
               <Sparkles size={32} />
             </div>
             <h2 className="text-4xl font-black tracking-tighter text-white">Production Guide</h2>
@@ -62,11 +62,11 @@ const HelpModal: React.FC<Props> = ({ isOpen, onClose }) => {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {[
                   { icon: <Target className="text-blue-400" />, title: "1. Occasion", desc: "Select the theme, from Birthdays to a simple Hello." },
-                  // Added missing Wind icon
                   { icon: <Wind className="text-purple-400" />, title: "2. Atmosphere", desc: "Pick a preset or type a Custom Scenic Description." },
                   { icon: <MessageSquare className="text-green-400" />, title: "3. Script", desc: "Type your message. AI will voice it and sync visuals." },
-                  { icon: <Camera className="text-yellow-400" />, title: "4. Reference", desc: "Optionally upload a photo to guide the AI's visual style." },
-                  { icon: <Zap className="text-red-400" />, title: "5. Produce", desc: "Hit the button and wait for the AI Director to finish." }
+                  { icon: <Music className="text-blue-500" />, title: "4. Music", desc: "Upload custom background audio (.mp3, .m4a) to set the mood." },
+                  { icon: <Camera className="text-yellow-400" />, title: "5. Reference", desc: "Optionally upload a photo to guide the AI's visual style." },
+                  { icon: <Zap className="text-red-400" />, title: "6. Produce", desc: "Hit the button and wait for the AI Director to finish." }
                 ].map((step, i) => (
                   <div key={i} className="p-6 bg-white/5 border border-white/5 rounded-3xl hover:border-white/10 transition-all group">
                     <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
@@ -78,7 +78,7 @@ const HelpModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 ))}
                 <div className="p-6 bg-blue-600/10 border border-blue-500/20 rounded-3xl flex flex-col justify-center items-center text-center">
                   <Share2 className="text-blue-500 mb-3" />
-                  <h4 className="text-white font-bold mb-1">6. Share!</h4>
+                  <h4 className="text-white font-bold mb-1">7. Share!</h4>
                   <p className="text-[10px] text-blue-300/60 uppercase tracking-widest font-black">Final Distribution</p>
                 </div>
               </div>
@@ -89,8 +89,18 @@ const HelpModal: React.FC<Props> = ({ isOpen, onClose }) => {
               <h3 className="text-xs font-black text-blue-500 uppercase tracking-[0.2em] mb-6">Recent Studio Enhancements</h3>
               <div className="space-y-4">
                 <div className="flex gap-5 p-5 bg-white/5 rounded-3xl border border-white/5">
+                  <div className="shrink-0 w-10 h-10 bg-indigo-500/10 rounded-xl flex items-center justify-center text-indigo-400">
+                    <Music size={20} />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white mb-1">Custom Background Music</h4>
+                    <p className="text-[11px] text-gray-500 leading-relaxed">
+                      Replace standard theatrical audio with your own tracks. Supported formats include .mp3, .mp4, .amr, and .m4a. Perfect for personal soundtracks.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-5 p-5 bg-white/5 rounded-3xl border border-white/5">
                   <div className="shrink-0 w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-400">
-                    {/* Added missing PenTool icon */}
                     <PenTool size={20} />
                   </div>
                   <div>

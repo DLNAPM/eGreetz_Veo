@@ -74,6 +74,11 @@ export interface ImageFile {
   base64: string;
 }
 
+export interface AudioFile {
+  file: File;
+  base64: string;
+}
+
 export interface VideoFile {
   file: File;
   base64: string;
@@ -88,6 +93,7 @@ export interface GreetingRecord {
   scenicDescription?: string;
   videoUrl: string;
   voice?: VoiceGender;
+  backgroundMusicUrl?: string;
   createdAt: number;
 }
 
@@ -98,6 +104,7 @@ export interface GenerateGreetingParams {
   scenicDescription?: string;
   voice: VoiceGender;
   userPhoto: ImageFile | null;
+  backgroundMusic: AudioFile | null;
   model: VeoModel;
   aspectRatio: AspectRatio;
   extended: boolean;

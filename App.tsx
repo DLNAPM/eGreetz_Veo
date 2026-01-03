@@ -10,6 +10,7 @@ import {
   isFirebaseEnabled, 
   onAuthStateChangedListener,
   uploadVideoToCloud,
+  uploadAudioToCloud,
   getReceivedGreetings,
   sendToInternalUser,
   type User 
@@ -29,7 +30,7 @@ const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.AUTH);
   const [myGreetings, setMyGreetings] = useState<GreetingRecord[]>([]);
   const [receivedGreetings, setReceivedGreetings] = useState<GreetingRecord[]>([]);
-  const [currentResult, setCurrentResult] = useState<{ url: string; params: GenerateGreetingParams; record?: GreetingRecord; audioUrl?: string } | null>(null);
+  const [currentResult, setCurrentResult] = useState<{ url: string; params: GenerateGreetingParams; record?: GreetingRecord; audioUrl?: string; backgroundMusicUrl?: string } | null>(null);
   const [editingGreeting, setEditingGreeting] = useState<GreetingRecord | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
@@ -119,10 +120,19 @@ const App: React.FC = () => {
       });
       
       let finalUrl = "";
+      let backgroundMusicUrl = "";
       let newRecord: GreetingRecord | undefined;
 
       if (isFirebaseReady) {
-        finalUrl = await uploadVideoToCloud(blob, user.uid);
+        // Parallel upload if possible
+        const uploads = [uploadVideoToCloud(blob, user.uid)];
+        if (params.backgroundMusic) {
+          uploads.push(uploadAudioToCloud(params.backgroundMusic.file, user.uid));
+        }
+
+        const [vUrl, aUrl] = await Promise.all(uploads);
+        finalUrl = vUrl;
+        backgroundMusicUrl = aUrl || (editingGreeting?.backgroundMusicUrl || "");
         
         if (editingGreeting) {
           // Update existing record
@@ -132,7 +142,8 @@ const App: React.FC = () => {
             theme: params.theme,
             scenicDescription: params.scenicDescription,
             videoUrl: finalUrl,
-            voice: params.voice
+            voice: params.voice,
+            backgroundMusicUrl: backgroundMusicUrl
           });
 
           newRecord = {
@@ -142,7 +153,8 @@ const App: React.FC = () => {
             theme: params.theme,
             scenicDescription: params.scenicDescription,
             videoUrl: finalUrl,
-            voice: params.voice
+            voice: params.voice,
+            backgroundMusicUrl: backgroundMusicUrl
           };
         } else {
           // Save new record
@@ -154,6 +166,7 @@ const App: React.FC = () => {
             scenicDescription: params.scenicDescription,
             videoUrl: finalUrl,
             voice: params.voice,
+            backgroundMusicUrl: backgroundMusicUrl,
             createdAt: Date.now()
           });
 
@@ -166,6 +179,7 @@ const App: React.FC = () => {
             scenicDescription: params.scenicDescription,
             videoUrl: finalUrl,
             voice: params.voice,
+            backgroundMusicUrl: backgroundMusicUrl,
             createdAt: Date.now()
           };
         }
@@ -174,13 +188,15 @@ const App: React.FC = () => {
         loadData(user);
       } else {
         finalUrl = URL.createObjectURL(blob);
+        backgroundMusicUrl = params.backgroundMusic ? URL.createObjectURL(params.backgroundMusic.file) : "";
       }
 
       setCurrentResult({ 
         url: finalUrl, 
         params, 
         record: newRecord,
-        audioUrl: audioBase64 
+        audioUrl: audioBase64,
+        backgroundMusicUrl: backgroundMusicUrl
       });
       setAppState(AppState.SUCCESS);
     } catch (e: any) {
@@ -222,6 +238,7 @@ const App: React.FC = () => {
     setCurrentResult({
       url: greeting.videoUrl,
       record: greeting,
+      backgroundMusicUrl: greeting.backgroundMusicUrl,
       params: {
         occasion: greeting.occasion,
         message: greeting.message,
@@ -229,6 +246,7 @@ const App: React.FC = () => {
         scenicDescription: greeting.scenicDescription,
         voice: greeting.voice || VoiceGender.FEMALE, 
         userPhoto: null,
+        backgroundMusic: null,
         model: VeoModel.VEO_FAST,
         aspectRatio: AspectRatio.LANDSCAPE,
         extended: false

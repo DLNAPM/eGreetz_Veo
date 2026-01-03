@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Occasion, GreetingTheme, VoiceGender, GenerateGreetingParams, ImageFile, VeoModel, AspectRatio, GreetingRecord } from '../types';
-import { Mic, Upload, X, Sparkles, Wand2, ChevronLeft, Clock, Zap, HelpCircle, ChevronDown, Calendar, Wind, PenTool } from 'lucide-react';
+import { Occasion, GreetingTheme, VoiceGender, GenerateGreetingParams, ImageFile, AudioFile, VeoModel, AspectRatio, GreetingRecord } from '../types';
+import { Mic, Upload, X, Sparkles, Wand2, ChevronLeft, Clock, Zap, HelpCircle, ChevronDown, Calendar, Wind, PenTool, Music } from 'lucide-react';
 import HelpModal from './HelpModal';
 
 interface Props {
@@ -17,11 +17,13 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
   const [scenicDescription, setScenicDescription] = useState('');
   const [voice, setVoice] = useState<VoiceGender>(VoiceGender.FEMALE);
   const [photo, setPhoto] = useState<ImageFile | null>(null);
+  const [audioFile, setAudioFile] = useState<AudioFile | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [extended, setExtended] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
 
   // Sorting logic for enums to ensure alphabetical order A-Z
   const sortedOccasions = Object.values(Occasion).sort((a, b) => a.localeCompare(b));
@@ -44,6 +46,17 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
       const reader = new FileReader();
       reader.onload = () => {
         setPhoto({ file, base64: (reader.result as string).split(',')[1] });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleAudioUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setAudioFile({ file, base64: (reader.result as string).split(',')[1] });
       };
       reader.readAsDataURL(file);
     }
@@ -190,9 +203,71 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
           </div>
         </div>
 
+        {/* Assets Upload Section */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="relative group">
+            <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Character Reference (Optional)</label>
+            {photo ? (
+              <div className="relative w-full h-24 rounded-2xl overflow-hidden border border-white/10 bg-[#0a0a0c]">
+                <img src={URL.createObjectURL(photo.file)} alt="Preview" className="w-full h-full object-cover opacity-60" />
+                <div className="absolute inset-0 flex items-center justify-center gap-4">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-white drop-shadow-lg">Asset Ready</span>
+                  <button 
+                    onClick={() => setPhoto(null)}
+                    className="p-2 bg-red-600 rounded-full text-white hover:bg-red-500 transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full h-24 bg-[#0a0a0c] border-2 border-dashed border-white/5 rounded-2xl flex flex-col items-center justify-center gap-2 text-gray-500 hover:text-blue-400 hover:bg-[#121214] transition-all"
+              >
+                <Upload size={20} className="opacity-30" />
+                <span className="font-bold text-[10px] uppercase tracking-widest">Character Photo</span>
+              </button>
+            )}
+            <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} />
+          </div>
+
+          <div className="relative group">
+            <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Background Music (Optional)</label>
+            {audioFile ? (
+              <div className="relative w-full h-24 rounded-2xl overflow-hidden border border-white/10 bg-blue-600/5 flex items-center justify-center px-4">
+                <div className="flex flex-col items-center">
+                  <Music size={20} className="text-blue-500 mb-1" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-blue-400 truncate max-w-full">{audioFile.file.name}</span>
+                </div>
+                <button 
+                  onClick={() => setAudioFile(null)}
+                  className="absolute top-2 right-2 p-1.5 bg-red-600 rounded-full text-white hover:bg-red-500 transition-colors"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ) : (
+              <button 
+                onClick={() => audioInputRef.current?.click()}
+                className="w-full h-24 bg-[#0a0a0c] border-2 border-dashed border-white/5 rounded-2xl flex flex-col items-center justify-center gap-2 text-gray-500 hover:text-blue-400 hover:bg-[#121214] transition-all text-center px-4"
+              >
+                <Music size={20} className="opacity-30" />
+                <span className="font-bold text-[10px] uppercase tracking-widest">Upload Custom Audio (.mp3, .mp4, .amr, .m4a)</span>
+              </button>
+            )}
+            <input 
+              ref={audioInputRef} 
+              type="file" 
+              className="hidden" 
+              accept=".mp3,.mp4,.amr,.m4a,audio/*" 
+              onChange={handleAudioUpload} 
+            />
+          </div>
+        </div>
+
         {/* Duration & Voice Modulation */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-           {/* Voice Modulation Dropdown */}
            <div className="relative group">
             <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Voice Modulation</label>
             <div className="relative">
@@ -228,34 +303,6 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
           </div>
         </div>
 
-        {/* Asset Upload */}
-        <div className="relative group">
-          <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Asset Reference (Optional)</label>
-          {photo ? (
-            <div className="relative w-full h-32 rounded-2xl overflow-hidden border border-white/5">
-              <img src={URL.createObjectURL(photo.file)} alt="Preview" className="w-full h-full object-cover opacity-60" />
-              <div className="absolute inset-0 flex items-center justify-center gap-4">
-                <span className="text-xs font-black uppercase tracking-widest text-white drop-shadow-lg">Asset Ready</span>
-                <button 
-                  onClick={() => setPhoto(null)}
-                  className="p-2 bg-red-600 rounded-full text-white hover:bg-red-500 transition-colors"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button 
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full h-20 bg-[#0a0a0c] border-2 border-dashed border-white/5 rounded-2xl flex items-center justify-center gap-4 text-gray-500 hover:text-blue-400 hover:bg-[#121214] transition-all"
-            >
-              <Upload size={24} className="opacity-30" />
-              <span className="font-bold text-xs uppercase tracking-widest">Upload Character Reference</span>
-            </button>
-          )}
-          <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} />
-        </div>
-
         {/* Actions Section */}
         <div className="pt-4">
           <button
@@ -266,6 +313,7 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
               scenicDescription,
               voice, 
               userPhoto: photo, 
+              backgroundMusic: audioFile,
               model: VeoModel.VEO_FAST, 
               aspectRatio: AspectRatio.LANDSCAPE,
               extended 
