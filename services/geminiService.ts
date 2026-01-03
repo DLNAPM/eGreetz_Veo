@@ -37,7 +37,19 @@ export const generateGreetingVideo = async (
 ): Promise<{ objectUrl: string; blob: Blob }> => {
   // Always initialize with named parameter and process.env.API_KEY
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const modelToUse = params.userPhoto ? 'veo-3.1-generate-preview' : params.model;
+  
+  const targetDuration = (params.audioDuration || 0) + 2;
+  const standardDuration = 7;
+  const needsExtension = params.extended || targetDuration > standardDuration;
+
+  /**
+   * IMPORTANT: If we need to extend the video, the initial generation 
+   * MUST use 'veo-3.1-generate-preview' to ensure compatibility with 
+   * the extension endpoint and processing requirements.
+   */
+  const modelToUse = (needsExtension || params.userPhoto) 
+    ? 'veo-3.1-generate-preview' 
+    : params.model;
 
   // Prioritize scenicDescription if provided by user
   const visualContext = params.scenicDescription && params.scenicDescription.trim().length > 0 
@@ -51,6 +63,7 @@ export const generateGreetingVideo = async (
     Context: ${params.message.substring(0, 300)}
   `.trim();
 
+  // Extension only supports 720p
   const config: any = {
     numberOfVideos: 1,
     resolution: '720p',
@@ -85,16 +98,16 @@ export const generateGreetingVideo = async (
     let finalVideo = operation.response?.generatedVideos?.[0]?.video;
     
     // Extend video if audio duration exceeds standard 7s length OR if "Director's Cut" is selected
-    // We add 2 seconds of padding to ensure the audio isn't cut off by timing variances
-    const targetDuration = (params.audioDuration || 0) + 2;
-    const standardDuration = 7;
-    
-    // If user explicitly asked for Director's Cut (params.extended) 
-    // OR the audio script is longer than standard 7s production.
-    if ((params.extended || targetDuration > standardDuration) && finalVideo) {
+    if (needsExtension && finalVideo) {
+      /**
+       * We add a short delay to ensure the backend has fully processed 
+       * the generated video asset before we request an extension.
+       */
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+
       const extensionPayload = {
         model: 'veo-3.1-generate-preview',
-        prompt: `Continue the cinematic celebration for ${params.occasion}. The scene evolves beautifully while maintaining the same style, environment, and characters. Highly detailed celebratory atmosphere.`,
+        prompt: `The celebration continues for ${params.occasion}. The scene flows seamlessly into a beautiful cinematic evolution, keeping the same character and environmental style. High fidelity celebratory visuals.`,
         video: finalVideo,
         config: {
           numberOfVideos: 1,
