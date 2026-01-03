@@ -1,11 +1,11 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Occasion, GreetingTheme, VoiceGender, GenerateGreetingParams, ImageFile, VeoModel, AspectRatio, GreetingRecord } from '../types';
-import { Mic, Upload, X, Sparkles, Wand2, ChevronLeft, Clock, Zap, HelpCircle, ChevronDown, Calendar, Wind } from 'lucide-react';
+import { Mic, Upload, X, Sparkles, Wand2, ChevronLeft, Clock, Zap, HelpCircle, ChevronDown, Calendar, Wind, PenTool } from 'lucide-react';
 import HelpModal from './HelpModal';
 
 interface Props {
-  onGenerate: (params: GenerateGreetingParams & { extended: boolean }) => void;
+  onGenerate: (params: GenerateGreetingParams) => void;
   onCancel: () => void;
   initialData?: GreetingRecord | null;
 }
@@ -14,6 +14,7 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
   const [occasion, setOccasion] = useState<Occasion>(Occasion.BIRTHDAY);
   const [message, setMessage] = useState('');
   const [theme, setTheme] = useState<GreetingTheme>(GreetingTheme.BALLOONS);
+  const [scenicDescription, setScenicDescription] = useState('');
   const [voice, setVoice] = useState<VoiceGender>(VoiceGender.FEMALE);
   const [photo, setPhoto] = useState<ImageFile | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -32,6 +33,7 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
       setOccasion(initialData.occasion);
       setMessage(initialData.message);
       setTheme(initialData.theme);
+      if (initialData.scenicDescription) setScenicDescription(initialData.scenicDescription);
       if (initialData.voice) setVoice(initialData.voice);
     }
   }, [initialData]);
@@ -147,6 +149,23 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
           </div>
         </div>
 
+        {/* CUSTOM SCENIC DESCRIPTION */}
+        <div>
+          <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Scenic Description (Optional - Overrides Environment)</label>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-blue-500">
+              <PenTool size={18} />
+            </div>
+            <input
+              type="text"
+              value={scenicDescription}
+              onChange={(e) => setScenicDescription(e.target.value)}
+              placeholder="e.g. A futuristic city with holographic neon signs and rain..."
+              className="w-full bg-[#0a0a0c] border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 hover:bg-white/5 transition-all placeholder-gray-700"
+            />
+          </div>
+        </div>
+
         {/* YOUR MESSAGE */}
         <div>
           <div className="flex justify-between items-center mb-3">
@@ -244,6 +263,7 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
               occasion, 
               message, 
               theme, 
+              scenicDescription,
               voice, 
               userPhoto: photo, 
               model: VeoModel.VEO_FAST, 

@@ -84,6 +84,7 @@ export interface GreetingRecord {
   occasion: Occasion;
   message: string;
   theme: GreetingTheme;
+  scenicDescription?: string;
   videoUrl: string;
   voice?: VoiceGender;
   createdAt: number;
@@ -93,6 +94,7 @@ export interface GenerateGreetingParams {
   occasion: Occasion;
   message: string;
   theme: GreetingTheme;
+  scenicDescription?: string;
   voice: VoiceGender;
   userPhoto: ImageFile | null;
   model: VeoModel;

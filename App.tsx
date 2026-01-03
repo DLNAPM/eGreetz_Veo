@@ -130,6 +130,7 @@ const App: React.FC = () => {
             occasion: params.occasion,
             message: params.message,
             theme: params.theme,
+            scenicDescription: params.scenicDescription,
             videoUrl: finalUrl,
             voice: params.voice
           });
@@ -139,6 +140,7 @@ const App: React.FC = () => {
             occasion: params.occasion,
             message: params.message,
             theme: params.theme,
+            scenicDescription: params.scenicDescription,
             videoUrl: finalUrl,
             voice: params.voice
           };
@@ -149,6 +151,7 @@ const App: React.FC = () => {
             occasion: params.occasion,
             message: params.message,
             theme: params.theme,
+            scenicDescription: params.scenicDescription,
             videoUrl: finalUrl,
             voice: params.voice,
             createdAt: Date.now()
@@ -160,6 +163,7 @@ const App: React.FC = () => {
             occasion: params.occasion,
             message: params.message,
             theme: params.theme,
+            scenicDescription: params.scenicDescription,
             videoUrl: finalUrl,
             voice: params.voice,
             createdAt: Date.now()
@@ -222,6 +226,7 @@ const App: React.FC = () => {
         occasion: greeting.occasion,
         message: greeting.message,
         theme: greeting.theme,
+        scenicDescription: greeting.scenicDescription,
         voice: greeting.voice || VoiceGender.FEMALE, 
         userPhoto: null,
         model: VeoModel.VEO_FAST,

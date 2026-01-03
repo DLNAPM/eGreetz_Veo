@@ -39,9 +39,14 @@ export const generateGreetingVideo = async (
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const modelToUse = params.userPhoto ? 'veo-3.1-generate-preview' : params.model;
 
+  // Prioritize scenicDescription if provided by user
+  const visualContext = params.scenicDescription && params.scenicDescription.trim().length > 0 
+    ? `Visual Scene: ${params.scenicDescription}` 
+    : `Visual Theme: ${params.theme}`;
+
   const cinematicPrompt = `
     A cinematic, high-quality holiday greeting video for ${params.occasion}.
-    Visual Theme: ${params.theme}. 
+    ${visualContext}. 
     Atmosphere: Joyful, celebratory, professional cinematic lighting, 8k resolution feel.
     Context: ${params.message.substring(0, 300)}
   `.trim();
