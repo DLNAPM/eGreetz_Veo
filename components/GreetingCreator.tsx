@@ -291,7 +291,7 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
               </div>
               <div>
                 <p className="font-black text-white uppercase tracking-widest text-[10px]">Director's Cut</p>
-                <p className="text-gray-500 text-[10px]">Extend to 15 seconds</p>
+                <p className="text-gray-500 text-[10px]">Auto-sync to script length</p>
               </div>
             </div>
             <button 
@@ -321,7 +321,7 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
             disabled={!message.trim()}
             className="w-full py-6 bg-blue-600 rounded-3xl font-black text-2xl flex items-center justify-center gap-5 hover:bg-blue-500 transition-all active:scale-[0.99] disabled:opacity-30 disabled:cursor-not-allowed shadow-[0_20px_60px_-15px_rgba(37,99,235,0.6)] text-white"
           >
-            <Zap size={28} fill="currentColor" /> {initialData ? 'Update & Generate' : `Produce ${extended ? '15s' : '7s'} Film`}
+            <Zap size={28} fill="currentColor" /> {initialData ? 'Update & Generate' : `Produce Full Production`}
           </button>
         </div>
       </div>

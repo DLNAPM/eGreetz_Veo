@@ -8,7 +8,8 @@ import { GenerateGreetingParams, VoiceGender, VeoModel } from '../types';
 
 /**
  * Helper to decode base64 audio and get its duration in seconds.
- * Note: Gemini TTS output is raw PCM, so we calculate based on expected sample rate.
+ * Gemini TTS output is raw PCM (no header).
+ * Assuming 16-bit mono PCM at 24kHz (2 bytes per sample).
  */
 async function getAudioDuration(base64Data: string): Promise<number> {
   try {
@@ -18,8 +19,7 @@ async function getAudioDuration(base64Data: string): Promise<number> {
       bytes[i] = binaryString.charCodeAt(i);
     }
     
-    // The audio bytes returned by the API is raw PCM data (no header).
-    // Assuming 16-bit mono PCM at 24kHz (2 bytes per sample).
+    // Formula: total_bytes / (bytes_per_sample * samples_per_second)
     const duration = (bytes.length / 2) / 24000; 
     return duration;
   } catch (e) {
@@ -30,36 +30,35 @@ async function getAudioDuration(base64Data: string): Promise<number> {
 
 /**
  * Generates a cinematic greeting video using Gemini Veo models.
- * Dynamically adjusts length to be syncronized with the generated audio.
+ * Dynamically adjusts length to be synchronized with the generated audio script.
  */
 export const generateGreetingVideo = async (
   params: GenerateGreetingParams & { audioDuration?: number }
 ): Promise<{ objectUrl: string; blob: Blob }> => {
-  // Always initialize with named parameter and process.env.API_KEY
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  // Calculate the goal duration based on the audio script plus 2 seconds of padding
+  // Calculate the target duration based on the actual audio script length plus padding
   const audioDuration = params.audioDuration || 7;
-  let targetDuration = audioDuration + 2;
+  let targetDuration = Math.ceil(audioDuration) + 3; // Add 3s padding for a comfortable finish
   
-  // If "Director's Cut" is selected, ensure we have at least 15 seconds
+  // If "Director's Cut" is selected, we ensure the video is at least 15 seconds
+  // But if the script is longer, we follow the script duration.
   if (params.extended) {
     targetDuration = Math.max(targetDuration, 15);
   }
 
-  const standardDuration = 7;
-  const needsExtension = targetDuration > standardDuration;
+  const standardSegmentDuration = 7;
+  const needsExtension = targetDuration > standardSegmentDuration;
 
   /**
-   * IMPORTANT: If we need to extend the video, the initial generation 
-   * MUST use 'veo-3.1-generate-preview' to ensure compatibility with 
-   * the extension endpoint and processing requirements.
+   * CRITICAL: If any extension is anticipated, the initial segment MUST use
+   * 'veo-3.1-generate-preview' (not the fast model) to ensure the generated 
+   * asset is compatible with the extension endpoint.
    */
   const modelToUse = (needsExtension || params.userPhoto) 
     ? 'veo-3.1-generate-preview' 
     : params.model;
 
-  // Prioritize scenicDescription if provided by user
   const visualContext = params.scenicDescription && params.scenicDescription.trim().length > 0 
     ? `Visual Scene: ${params.scenicDescription}` 
     : `Visual Theme: ${params.theme}`;
@@ -71,21 +70,21 @@ export const generateGreetingVideo = async (
     Context: ${params.message.substring(0, 300)}
   `.trim();
 
-  // Extension only supports 720p
+  // Extensions currently require 720p resolution
   const config: any = {
     numberOfVideos: 1,
     resolution: '720p',
     aspectRatio: params.userPhoto ? '16:9' : params.aspectRatio,
   };
 
-  const payload: any = {
+  const initialPayload: any = {
     model: modelToUse,
     prompt: cinematicPrompt,
     config: config,
   };
 
   if (params.userPhoto) {
-    payload.config.referenceImages = [{
+    initialPayload.config.referenceImages = [{
       image: {
         imageBytes: params.userPhoto.base64,
         mimeType: params.userPhoto.file.type || 'image/jpeg',
@@ -95,29 +94,36 @@ export const generateGreetingVideo = async (
   }
 
   try {
-    // 1. Generate initial 7s segment
-    let operation = await ai.models.generateVideos(payload);
+    console.log(`Starting production. Audio duration: ${audioDuration}s. Target video duration: ${targetDuration}s.`);
+    
+    // 1. Generate the initial 7s segment
+    let operation = await ai.models.generateVideos(initialPayload);
 
     while (!operation.done) {
       await new Promise((resolve) => setTimeout(resolve, 10000));
       operation = await ai.operations.getVideosOperation({ operation: operation });
     }
 
-    let finalVideo = operation.response?.generatedVideos?.[0]?.video;
-    let currentVideoDuration = 7;
+    let currentVideo = operation.response?.generatedVideos?.[0]?.video;
+    if (!currentVideo) throw new Error("Initial video generation failed to return an asset.");
     
-    // 2. Iteratively extend the video until targetDuration is met
-    // Each extension typically adds ~7 seconds.
-    while (currentVideoDuration < targetDuration && finalVideo) {
+    let currentVideoDuration = standardSegmentDuration;
+    
+    // 2. Iteratively extend the video until targetDuration is satisfied
+    // Each extension typically adds about 7 seconds of new footage.
+    while (currentVideoDuration < targetDuration) {
+      console.log(`Extending production. Current duration: ${currentVideoDuration}s. Goal: ${targetDuration}s.`);
+      
       /**
-       * Ensure the backend has fully processed the video asset before next extension.
+       * INCREASED DELAY: The "Input video must be a video that was generated by VEO that has been processed" 
+       * error often occurs because the newly generated URI isn't yet fully indexed for extension.
        */
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      await new Promise((resolve) => setTimeout(resolve, 10000));
 
       const extensionPayload = {
         model: 'veo-3.1-generate-preview',
-        prompt: `Continue the beautiful cinematic celebration for ${params.occasion}. The scene flows seamlessly into an evolving visual masterpiece, maintaining perfect stylistic and character consistency. More celebratory detail and cinematic flair.`,
-        video: finalVideo,
+        prompt: `Continue the beautiful cinematic celebration for ${params.occasion}. The scene flows seamlessly into an evolving visual masterpiece, maintaining perfect stylistic, character, and environmental consistency. High fidelity celebratory details.`,
+        video: currentVideo,
         config: {
           numberOfVideos: 1,
           resolution: '720p',
@@ -133,36 +139,36 @@ export const generateGreetingVideo = async (
       
       const extendedVideo = extendOp.response?.generatedVideos?.[0]?.video;
       if (extendedVideo) {
-        finalVideo = extendedVideo;
-        currentVideoDuration += 7; // Veo 3.1 extensions add up to 7 seconds per call
+        currentVideo = extendedVideo;
+        currentVideoDuration += 7; // Increment based on standard extension length
       } else {
-        break; // Stop if extension fails
+        console.warn("Extension operation succeeded but returned no video asset. Stopping extensions.");
+        break; 
       }
     }
 
-    const downloadLink = finalVideo?.uri;
+    const downloadLink = currentVideo?.uri;
     if (downloadLink) {
-      // Append API key when fetching from the download link
       const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
-      if (!response.ok) throw new Error('Failed to download video.');
+      if (!response.ok) throw new Error('Failed to download final production file.');
       
       const blob = await response.blob();
+      console.log("Production finalized successfully.");
       return { objectUrl: URL.createObjectURL(blob), blob };
     }
   } catch (error: any) {
-    console.error("Gemini Video Error:", error);
+    console.error("Gemini Video Production Error:", error);
     throw error;
   }
 
-  throw new Error('Video generation failed.');
+  throw new Error('Video production failed to complete.');
 };
 
 /**
  * Generates audio for a greeting message using Gemini TTS.
- * Returns duration for video sync.
+ * Returns duration for video synchronization.
  */
 export const generateGreetingVoice = async (text: string, voice: VoiceGender): Promise<{ base64: string, duration: number } | null> => {
-  // Always initialize with named parameter and process.env.API_KEY
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const voiceMap: Record<VoiceGender, string> = {
