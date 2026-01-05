@@ -253,14 +253,14 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
                 className="w-full h-24 bg-[#0a0a0c] border-2 border-dashed border-white/5 rounded-2xl flex flex-col items-center justify-center gap-2 text-gray-500 hover:text-blue-400 hover:bg-[#121214] transition-all text-center px-4"
               >
                 <Music size={20} className="opacity-30" />
-                <span className="font-bold text-[10px] uppercase tracking-widest">Upload Custom Audio (.mp3, .mp4, .amr, .m4a)</span>
+                <span className="font-bold text-[10px] uppercase tracking-widest">Upload Custom Audio (.mp3, .m4a)</span>
               </button>
             )}
             <input 
               ref={audioInputRef} 
               type="file" 
               className="hidden" 
-              accept=".mp3,.mp4,.amr,.m4a,audio/*" 
+              accept=".mp3,.m4a,audio/*" 
               onChange={handleAudioUpload} 
             />
           </div>
@@ -291,7 +291,7 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
               </div>
               <div>
                 <p className="font-black text-white uppercase tracking-widest text-[10px]">Director's Cut</p>
-                <p className="text-gray-500 text-[10px]">Auto-sync to script length</p>
+                <p className="text-gray-500 text-[10px]">15s+ Production & Auto-Sync</p>
               </div>
             </div>
             <button 

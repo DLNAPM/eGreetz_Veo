@@ -17,11 +17,11 @@ async function getAudioDuration(base64Data: string): Promise<number> {
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
-    // 2 bytes per sample, 24000 samples per second
+    // 2 bytes per sample (16-bit), 24000 samples per second
     const duration = (bytes.length / 2) / 24000; 
     return duration;
   } catch (e) {
-    console.warn("Could not determine audio duration, defaulting to 10s", e);
+    console.warn("[Studio] Could not determine audio duration accurately, defaulting to 10s", e);
     return 10;
   }
 }
@@ -29,27 +29,31 @@ async function getAudioDuration(base64Data: string): Promise<number> {
 /**
  * Generates a cinematic greeting video using Gemini Veo models.
  * Dynamically extends the production to match or exceed the audio script duration.
+ * Ensures "Director's Cut" produces a video of at least 15 seconds.
  */
 export const generateGreetingVideo = async (
   params: GenerateGreetingParams & { audioDuration?: number }
 ): Promise<{ objectUrl: string; blob: Blob }> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  // Calculate Target Duration: Audio length + generous 5s padding
+  // Calculate Target Duration
+  // Video must cover the full audio script + a buffer for smooth outro
   const audioDuration = params.audioDuration || 7;
-  let targetDuration = Math.ceil(audioDuration) + 5; 
+  let targetDuration = Math.ceil(audioDuration) + 2; 
   
-  // Director's Cut Mode: Ensure at least 21 seconds (3 segments) for a premium feel
+  // "Director's Cut" logic: Ensure a minimum of 15 seconds.
+  // Since segments are ~7s, 2 segments is 14s, so we target 15s+ which will naturally
+  // result in 3 segments (approx 21s) for a robust production.
   if (params.extended) {
-    targetDuration = Math.max(targetDuration, 21);
+    targetDuration = Math.max(targetDuration, 15);
   }
 
-  const segmentLength = 7;
+  const segmentLength = 7; 
   const needsExtension = targetDuration > segmentLength;
 
   /**
-   * We must use 'veo-3.1-generate-preview' for all multi-segment operations
-   * as it is the only model that guarantees compatibility with the extension endpoint.
+   * For any production requiring extensions, we use 'veo-3.1-generate-preview'
+   * as it is the primary model for consistent stylistic chaining.
    */
   const modelToUse = (needsExtension || params.userPhoto) 
     ? 'veo-3.1-generate-preview' 
@@ -63,7 +67,7 @@ export const generateGreetingVideo = async (
     A cinematic, high-quality holiday greeting video for ${params.occasion}.
     ${visualContext}. 
     Atmosphere: Joyful, celebratory, professional cinematic lighting, 8k resolution feel.
-    Context: ${params.message.substring(0, 500)}
+    Visual narrative: ${params.message.substring(0, 1000)}
   `.trim();
 
   const config: any = {
@@ -89,9 +93,9 @@ export const generateGreetingVideo = async (
   }
 
   try {
-    console.log(`[Studio] Starting Production. Script: ${audioDuration}s. Goal: ${targetDuration}s.`);
+    console.log(`[Studio] Starting Production. Script Length: ${audioDuration.toFixed(1)}s. Target Video: ${targetDuration}s.`);
     
-    // 1. Initial Production (0-7s)
+    // 1. Initial Segment (0 - 7s)
     let operation = await ai.models.generateVideos(initialPayload);
     while (!operation.done) {
       await new Promise((resolve) => setTimeout(resolve, 10000));
@@ -99,24 +103,23 @@ export const generateGreetingVideo = async (
     }
 
     let currentVideoAsset = operation.response?.generatedVideos?.[0]?.video;
-    if (!currentVideoAsset) throw new Error("Initial production failed to return video asset.");
+    if (!currentVideoAsset) throw new Error("Initial production segment failed.");
     
     let currentProducedDuration = segmentLength;
     
     // 2. Iterative Extension Loop
-    // We continue extending in ~7s chunks until we exceed the target duration.
+    // Continues production until the video length satisfies the target duration.
     while (currentProducedDuration < targetDuration) {
-      console.log(`[Studio] Extending Production. Current: ${currentProducedDuration}s. Target: ${targetDuration}s.`);
+      console.log(`[Studio] Extending Production. Progress: ${currentProducedDuration}s / ${targetDuration}s.`);
       
       /**
-       * CRITICAL: We wait 15 seconds to ensure the URI from the previous operation 
-       * is fully processed and available for extension by the backend.
+       * Delay to ensure the previous video segment is fully indexed by the Gemini backend.
        */
-      await new Promise((resolve) => setTimeout(resolve, 15000));
+      await new Promise((resolve) => setTimeout(resolve, 20000));
 
       const extensionPayload = {
         model: 'veo-3.1-generate-preview',
-        prompt: `Continue the cinematic celebration for ${params.occasion}. The visual narrative flows perfectly from the previous scene, maintaining identical lighting, style, and character consistency. More celebratory energy and cinematic detail.`,
+        prompt: `Continue the beautiful cinematic celebration for ${params.occasion}. The scene flows seamlessly into more celebratory visuals, maintaining perfect style, character, and lighting consistency.`,
         video: currentVideoAsset,
         config: {
           numberOfVideos: 1,
@@ -136,7 +139,7 @@ export const generateGreetingVideo = async (
         currentVideoAsset = extendedAsset;
         currentProducedDuration += segmentLength;
       } else {
-        console.warn("[Studio] Extension failed to return new asset. Finalizing with current length.");
+        console.warn("[Studio] Extension failed to return asset. Finalizing.");
         break; 
       }
     }
@@ -144,18 +147,18 @@ export const generateGreetingVideo = async (
     const downloadLink = currentVideoAsset?.uri;
     if (downloadLink) {
       const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
-      if (!response.ok) throw new Error('Failed to retrieve final production file.');
+      if (!response.ok) throw new Error('Failed to retrieve finalized production file.');
       
       const blob = await response.blob();
-      console.log("[Studio] Production Wrap. Finalizing file...");
+      console.log(`[Studio] Success. Produced approx ${currentProducedDuration}s of cinematic visuals.`);
       return { objectUrl: URL.createObjectURL(blob), blob };
     }
   } catch (error: any) {
-    console.error("[Studio] Production Error:", error);
+    console.error("[Studio] Video Pipeline Error:", error);
     throw error;
   }
 
-  throw new Error('Video production failed to yield a final asset.');
+  throw new Error('Production pipeline failed.');
 };
 
 /**
@@ -172,7 +175,6 @@ export const generateGreetingVoice = async (text: string, voice: VoiceGender): P
   };
 
   try {
-    // Note: Removed "Say warmly:" to prevent model from summarizing long text inputs.
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
       contents: [{ parts: [{ text: text }] }],
