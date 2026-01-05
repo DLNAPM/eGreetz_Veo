@@ -38,9 +38,17 @@ export const generateGreetingVideo = async (
   // Always initialize with named parameter and process.env.API_KEY
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  const targetDuration = (params.audioDuration || 0) + 2;
+  // Calculate the goal duration based on the audio script plus 2 seconds of padding
+  const audioDuration = params.audioDuration || 7;
+  let targetDuration = audioDuration + 2;
+  
+  // If "Director's Cut" is selected, ensure we have at least 15 seconds
+  if (params.extended) {
+    targetDuration = Math.max(targetDuration, 15);
+  }
+
   const standardDuration = 7;
-  const needsExtension = params.extended || targetDuration > standardDuration;
+  const needsExtension = targetDuration > standardDuration;
 
   /**
    * IMPORTANT: If we need to extend the video, the initial generation 
@@ -87,7 +95,7 @@ export const generateGreetingVideo = async (
   }
 
   try {
-    // Generate initial 7s video
+    // 1. Generate initial 7s segment
     let operation = await ai.models.generateVideos(payload);
 
     while (!operation.done) {
@@ -96,18 +104,19 @@ export const generateGreetingVideo = async (
     }
 
     let finalVideo = operation.response?.generatedVideos?.[0]?.video;
+    let currentVideoDuration = 7;
     
-    // Extend video if audio duration exceeds standard 7s length OR if "Director's Cut" is selected
-    if (needsExtension && finalVideo) {
+    // 2. Iteratively extend the video until targetDuration is met
+    // Each extension typically adds ~7 seconds.
+    while (currentVideoDuration < targetDuration && finalVideo) {
       /**
-       * We add a short delay to ensure the backend has fully processed 
-       * the generated video asset before we request an extension.
+       * Ensure the backend has fully processed the video asset before next extension.
        */
       await new Promise((resolve) => setTimeout(resolve, 5000));
 
       const extensionPayload = {
         model: 'veo-3.1-generate-preview',
-        prompt: `The celebration continues for ${params.occasion}. The scene flows seamlessly into a beautiful cinematic evolution, keeping the same character and environmental style. High fidelity celebratory visuals.`,
+        prompt: `Continue the beautiful cinematic celebration for ${params.occasion}. The scene flows seamlessly into an evolving visual masterpiece, maintaining perfect stylistic and character consistency. More celebratory detail and cinematic flair.`,
         video: finalVideo,
         config: {
           numberOfVideos: 1,
@@ -121,7 +130,14 @@ export const generateGreetingVideo = async (
         await new Promise((resolve) => setTimeout(resolve, 10000));
         extendOp = await ai.operations.getVideosOperation({ operation: extendOp });
       }
-      finalVideo = extendOp.response?.generatedVideos?.[0]?.video;
+      
+      const extendedVideo = extendOp.response?.generatedVideos?.[0]?.video;
+      if (extendedVideo) {
+        finalVideo = extendedVideo;
+        currentVideoDuration += 7; // Veo 3.1 extensions add up to 7 seconds per call
+      } else {
+        break; // Stop if extension fails
+      }
     }
 
     const downloadLink = finalVideo?.uri;

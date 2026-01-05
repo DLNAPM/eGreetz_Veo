@@ -126,9 +126,9 @@ const HelpModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     <Play size={20} />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-white mb-1">Dynamic Video Extension</h4>
+                    <h4 className="text-sm font-bold text-white mb-1">Intelligent Duration Sync</h4>
                     <p className="text-[11px] text-gray-500 leading-relaxed">
-                      Longer scripts now automatically trigger a "Director's Cut" extension to ensure the video lasts as long as the generated audio script.
+                      Our "Director's Cut" now iteratively extends the video in 7-second increments to perfectly match even the longest scripts, ensuring no part of your message is ever cut short.
                     </p>
                   </div>
                 </div>
