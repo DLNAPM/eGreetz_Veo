@@ -11,6 +11,7 @@ export enum AppState {
 }
 
 export enum Occasion {
+  NONE = 'None',
   BIRTHDAY = 'Happy Birthday',
   CHRISTMAS = 'Merry Christmas',
   ANNIVERSARY = 'Happy Anniversary',

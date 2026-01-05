@@ -11,7 +11,7 @@ interface Props {
 }
 
 const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData }) => {
-  const [occasion, setOccasion] = useState<Occasion>(Occasion.BIRTHDAY);
+  const [occasion, setOccasion] = useState<Occasion>(Occasion.NONE);
   const [message, setMessage] = useState('');
   const [theme, setTheme] = useState<GreetingTheme>(GreetingTheme.BALLOONS);
   const [scenicDescription, setScenicDescription] = useState('');
@@ -25,8 +25,14 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
 
-  // Sorting logic for enums to ensure alphabetical order A-Z
-  const sortedOccasions = Object.values(Occasion).sort((a, b) => a.localeCompare(b));
+  // Sorting logic for enums: 'None' always first, then A-Z
+  const sortedOccasions = [
+    Occasion.NONE,
+    ...Object.values(Occasion)
+      .filter(o => o !== Occasion.NONE)
+      .sort((a, b) => a.localeCompare(b))
+  ];
+  
   const sortedThemes = Object.values(GreetingTheme).sort((a, b) => a.localeCompare(b));
 
   // Initialize from initialData if editing
@@ -116,7 +122,7 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
         {/* SELECT OCCASION DROPDOWN */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="relative group">
-            <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Select Occasion (A-Z)</label>
+            <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Select Occasion (None First, then A-Z)</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-blue-500">
                 <Calendar size={18} />

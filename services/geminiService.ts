@@ -4,7 +4,7 @@ import {
   Modality,
   VideoGenerationReferenceType,
 } from '@google/genai';
-import { GenerateGreetingParams, VoiceGender, VeoModel } from '../types';
+import { GenerateGreetingParams, VoiceGender, VeoModel, Occasion } from '../types';
 
 /**
  * Helper to decode base64 audio and get its duration in seconds.
@@ -63,13 +63,18 @@ export const generateGreetingVideo = async (
 
   const visualContext = params.scenicDescription && params.scenicDescription.trim().length > 0 
     ? `Visual Scene: ${params.scenicDescription}` 
-    : `Visual Theme: ${params.theme}`;
+    : (params.occasion !== Occasion.NONE ? `Visual Theme: ${params.theme}` : '');
 
+  const occasionContext = params.occasion !== Occasion.NONE 
+    ? `holiday greeting video for ${params.occasion}` 
+    : `cinematic conceptual narrative video`;
+
+  // If occasion is NONE, we rely entirely on the script for visual inspiration
   const cinematicPrompt = `
-    A cinematic, high-quality holiday greeting video for ${params.occasion}.
+    A high-quality, professional cinematic ${occasionContext}.
     ${visualContext}. 
-    Atmosphere: Joyful, celebratory, professional cinematic lighting, 8k resolution feel.
-    Visual storytelling context: ${params.message.substring(0, 1000)}
+    Atmosphere: Professional cinematic lighting, 8k resolution feel, epic scale.
+    Visual storytelling narrative based on this script: ${params.message.substring(0, 1000)}
   `.trim();
 
   const config: any = {
@@ -124,7 +129,7 @@ export const generateGreetingVideo = async (
 
       const extensionPayload = {
         model: 'veo-3.1-generate-preview',
-        prompt: `Continue the cinematic celebration for ${params.occasion}. Seamless visual flow from the previous scene, maintaining lighting, characters, and festive atmosphere.`,
+        prompt: `Continue the cinematic narrative for ${params.occasion !== Occasion.NONE ? params.occasion : 'the story'}. Seamless visual flow from the previous scene, focusing on detailed visual representation of the script content.`,
         video: currentVideoAsset,
         config: {
           numberOfVideos: 1,
