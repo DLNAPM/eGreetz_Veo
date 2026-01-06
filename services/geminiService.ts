@@ -8,7 +8,6 @@ import { GenerateGreetingParams, VoiceGender, VeoModel, Occasion } from '../type
 
 /**
  * Helper to decode base64 audio and get its duration in seconds.
- * Gemini TTS output is raw PCM at 24kHz 16-bit mono.
  */
 async function getAudioDuration(base64Data: string): Promise<number> {
   try {
@@ -17,17 +16,15 @@ async function getAudioDuration(base64Data: string): Promise<number> {
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
-    // 2 bytes per sample (16-bit), 24000 samples per second
     const duration = (bytes.length / 2) / 24000; 
     return duration;
   } catch (e) {
-    console.warn("[Studio] Could not determine audio duration accurately, defaulting to 10s", e);
     return 10;
   }
 }
 
 /**
- * Generates a cinematic greeting video using Gemini Veo models.
+ * Generates a cinematic greeting video with instructions for lip-sync and facial animation.
  */
 export const generateGreetingVideo = async (
   params: GenerateGreetingParams & { audioDuration?: number }
@@ -51,20 +48,19 @@ export const generateGreetingVideo = async (
     ? `Visual Environment: ${params.scenicDescription}` 
     : (params.occasion !== Occasion.NONE ? `Visual Theme: ${params.theme}` : '');
 
-  const occasionHeader = params.occasion !== Occasion.NONE 
-    ? `Cinematic holiday greeting for ${params.occasion}` 
-    : `Awesome Cinematic Masterpiece with conceptual narrative`;
+  const lipSyncInstruction = params.userPhoto 
+    ? "The character from the reference image is looking at the camera and speaking the script naturally. Ensure realistic mouth movements, lip-syncing, and facial expressions that match the cadence of a person talking."
+    : "Ensure the visual narrative features elements that appear to be communicating or expressing the message visually.";
 
-  // Focus purely on script descriptors if Occasion is None
-  const scriptPriority = params.occasion === Occasion.NONE 
-    ? `IMPORTANT: This video has no specific occasion. Use the ENTIRE script text below to create the Awesome Cinematic Visuals, interpreting the imagery, mood, and story directly from these words: "${params.message}"`
-    : `Visual narrative based on this script: "${params.message.substring(0, 500)}..."`;
+  const scriptContext = `Video Script Content: "${params.message}"`;
 
   const cinematicPrompt = `
-    ${occasionHeader}.
+    A professional cinematic production.
     ${visualContext}. 
-    Style: High-end professional cinematic lighting, 8k resolution textures, epic atmosphere, detailed textures.
-    ${scriptPriority}
+    ${lipSyncInstruction}
+    Style: 8k resolution, professional film lighting, high-quality facial textures.
+    Narrative context: ${scriptContext}
+    IMPORTANT: The video should be silent or contain only atmospheric ambient noise; do not generate any synthetic voices or speech in the video file itself.
   `.trim();
 
   const config: any = {
@@ -97,17 +93,16 @@ export const generateGreetingVideo = async (
     }
 
     let currentVideoAsset = operation.response?.generatedVideos?.[0]?.video;
-    if (!currentVideoAsset) throw new Error("Initial production segment failed.");
+    if (!currentVideoAsset) throw new Error("Initial production failed.");
     
     let currentProducedDuration = segmentLength;
     
     while (currentProducedDuration < targetDuration) {
-      // 45s wait to allow backend indexing
       await new Promise((resolve) => setTimeout(resolve, 45000));
 
       const extensionPayload = {
         model: 'veo-3.1-generate-preview',
-        prompt: `Continue the cinematic visual narrative established by this script: ${params.message.substring(0, 200)}...`,
+        prompt: `Continue the cinematic shot. The character continues speaking and expressing the message: "${params.message.substring(0, 100)}...". Maintain perfect lip-sync and character consistency.`,
         video: currentVideoAsset,
         config: {
           numberOfVideos: 1,
@@ -134,7 +129,6 @@ export const generateGreetingVideo = async (
     const downloadLink = currentVideoAsset?.uri;
     if (downloadLink) {
       const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
-      if (!response.ok) throw new Error('Failed to retrieve finalized production file.');
       const blob = await response.blob();
       return { objectUrl: URL.createObjectURL(blob), blob };
     }
@@ -142,7 +136,7 @@ export const generateGreetingVideo = async (
     console.error("[Studio] Video Production Failure:", error);
     throw error;
   }
-  throw new Error('Video production pipeline failed.');
+  throw new Error('Production pipeline failed.');
 };
 
 /**
@@ -158,8 +152,8 @@ export const generateGreetingVoice = async (text: string, voice: VoiceGender): P
   };
 
   try {
-    // STRICT PROMPT: Instruct the model to read the script exactly once with NO repetitions.
-    const ttsPrompt = `Read the following script exactly once. DO NOT repeat any phrases. Read from start to finish without looping or stuttering. READ THIS TEXT ONCE: "${text}"`;
+    // EXTRA STRICT PROMPT for TTS to avoid "hallucinated repetition"
+    const ttsPrompt = `Read this script exactly as written. Speak clearly and naturally. Do not repeat words, do not stutter, and do not loop phrases. Read exactly once: "${text}"`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
@@ -179,7 +173,6 @@ export const generateGreetingVoice = async (text: string, voice: VoiceGender): P
 
     const duration = await getAudioDuration(base64Audio);
     
-    // Create Blob for persistent storage
     const binaryString = atob(base64Audio);
     const bytes = new Uint8Array(binaryString.length);
     for (let i = 0; i < binaryString.length; i++) {

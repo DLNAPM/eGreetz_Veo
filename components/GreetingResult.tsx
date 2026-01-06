@@ -17,7 +17,6 @@ interface Props {
   onInternalShare?: (email: string) => void;
 }
 
-// Helper functions for raw PCM decoding
 function decodeBase64(base64: string) {
   const binaryString = atob(base64);
   const len = binaryString.length;
@@ -53,7 +52,6 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
   const [canNativeShare, setCanNativeShare] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   
-  // Audio state refs
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioBufferRef = useRef<AudioBuffer | null>(null);
   const musicBufferRef = useRef<AudioBuffer | null>(null);
@@ -70,46 +68,38 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     }
   }, [shareUrl]);
 
-  // Handle Audio Initialization - Unified Source Selection
   useEffect(() => {
     const initAudio = async () => {
       try {
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
         audioContextRef.current = ctx;
 
-        // LOAD VOICE (Selection Priority: voiceUrl from Firebase > raw session audioUrl)
         const voiceSource = result.voiceUrl || result.audioUrl;
         if (voiceSource) {
           let buffer: AudioBuffer | null = null;
-          
           if (voiceSource.startsWith('data:') || !voiceSource.startsWith('http')) {
-            // It's a base64 string
             const cleanBase64 = voiceSource.replace(/^data:audio\/(wav|pcm);base64,/, '');
             const bytes = decodeBase64(cleanBase64);
             buffer = await decodePCM(bytes, ctx, 24000, 1);
           } else {
-            // It's a persistent cloud URL
             const resp = await fetch(voiceSource);
             const arrayBuffer = await resp.arrayBuffer();
             try {
-              // Try standard decode (MP3/WAV)
               buffer = await ctx.decodeAudioData(arrayBuffer);
             } catch {
-              // Fallback to raw PCM
               buffer = await decodePCM(new Uint8Array(arrayBuffer), ctx, 24000, 1);
             }
           }
           audioBufferRef.current = buffer;
         }
 
-        // LOAD BACKGROUND MUSIC
         if (result.backgroundMusicUrl) {
           const response = await fetch(result.backgroundMusicUrl);
           const arrayBuffer = await response.arrayBuffer();
           musicBufferRef.current = await ctx.decodeAudioData(arrayBuffer);
         }
       } catch (err) {
-        console.error("[Studio] Audio Initialization Error:", err);
+        console.error("[Studio] Audio System Error:", err);
       }
     };
 
@@ -122,7 +112,6 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     };
   }, [result.audioUrl, result.voiceUrl, result.backgroundMusicUrl]);
 
-  // Unified Play/Sync Logic
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -142,10 +131,8 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       stopNodes();
       const ctx = audioContextRef.current;
       if (!ctx || ctx.state === 'closed') return;
-
       if (ctx.state === 'suspended') ctx.resume();
 
-      // Play Background Music (Looped)
       if (musicBufferRef.current) {
         const mSrc = ctx.createBufferSource();
         mSrc.buffer = musicBufferRef.current;
@@ -154,13 +141,11 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
         mGain.gain.value = 0.4;
         mGain.connect(ctx.destination);
         mSrc.connect(mGain);
-        
         const mStart = Math.max(0, offset % musicBufferRef.current.duration);
         mSrc.start(0, mStart);
         musicNodeRef.current = mSrc;
       }
 
-      // Play Narrator (Strictly Once)
       if (audioBufferRef.current) {
         if (offset < audioBufferRef.current.duration) {
           const vSrc = ctx.createBufferSource();
@@ -198,17 +183,6 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleInternalTrigger = () => {
-    if (!result.record) {
-      alert("Please log in to share creations.");
-      return;
-    }
-    const email = prompt("Recipient Google Email:");
-    if (email && onInternalShare) {
-      onInternalShare(email.trim());
-    }
-  };
-
   return (
     <div className="w-full max-w-4xl animate-in zoom-in duration-500">
       <div className="text-center mb-10">
@@ -217,12 +191,14 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       </div>
 
       <div className="relative group rounded-3xl overflow-hidden shadow-2xl shadow-blue-500/20 mb-8 aspect-video bg-black ring-1 ring-white/10">
+        {/* CRITICAL: Video is MUTED to prevent AI background chatter. Audio is handled by AudioContext Moderator. */}
         <video 
           ref={videoRef}
           src={result.url} 
           controls 
           autoPlay 
           loop 
+          muted
           crossOrigin="anonymous"
           className="w-full h-full object-contain"
         />
@@ -232,7 +208,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
           </div>
           {(result.audioUrl || result.voiceUrl) && (
             <div className="flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md bg-green-600/80">
-              <Volume2 size={10} /> Narrator Active
+              <Volume2 size={10} /> Moderator Active
             </div>
           )}
         </div>
@@ -250,7 +226,10 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
             <button onClick={handleCopy} className="flex items-center justify-center gap-3 p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/5 font-bold text-sm">
               {copied ? <Check size={18} className="text-green-500" /> : <Copy size={18} />} {copied ? 'Copied' : 'Copy Link'}
             </button>
-            <button onClick={handleInternalTrigger} className="flex items-center justify-center gap-3 p-4 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-2xl font-bold text-sm hover:bg-blue-600/20">
+            <button onClick={() => {
+              const email = prompt("Recipient Google Email:");
+              if (email && onInternalShare) onInternalShare(email.trim());
+            }} className="flex items-center justify-center gap-3 p-4 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-2xl font-bold text-sm hover:bg-blue-600/20">
               <Users size={18} /> Send to Friend
             </button>
           </div>
