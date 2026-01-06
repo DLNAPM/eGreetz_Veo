@@ -94,6 +94,7 @@ export interface GreetingRecord {
   scenicDescription?: string;
   videoUrl: string;
   voice?: VoiceGender;
+  voiceUrl?: string; // Persistent synthesized voice
   backgroundMusicUrl?: string;
   createdAt: number;
 }

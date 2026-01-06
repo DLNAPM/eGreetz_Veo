@@ -129,13 +129,15 @@ export const uploadVideoToCloud = async (blob: Blob, userId: string): Promise<st
 };
 
 /**
- * Uploads an audio file to Firebase Storage and returns a permanent URL.
+ * Uploads an audio file/blob to Firebase Storage and returns a permanent URL.
  */
-export const uploadAudioToCloud = async (file: File, userId: string): Promise<string> => {
+export const uploadAudioToCloud = async (data: File | Blob, userId: string): Promise<string> => {
   if (!storage) throw new Error("Cloud Storage unavailable.");
-  const fileName = `audio/${userId}/${Date.now()}_${file.name}`;
+  const isFile = data instanceof File;
+  const extension = isFile ? data.name.split('.').pop() : 'pcm';
+  const fileName = `audio/${userId}/${Date.now()}.${extension}`;
   const storageRef = ref(storage, fileName);
-  await uploadBytes(storageRef, file);
+  await uploadBytes(storageRef, data);
   return await getDownloadURL(storageRef);
 };
 
@@ -186,6 +188,7 @@ export const sendToInternalUser = async (senderName: string, recipientEmail: str
     senderName,
     greetingId: greeting.id,
     videoUrl: greeting.videoUrl,
+    voiceUrl: greeting.voiceUrl || null, // Persist synthesized voice in sharing
     occasion: greeting.occasion,
     message: greeting.message,
     theme: greeting.theme,
