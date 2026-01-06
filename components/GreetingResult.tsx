@@ -69,14 +69,14 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     }
   }, [shareUrl]);
 
-  // Load Audio Assets
+  // Load Audio Assets: Narrator and Background Music
   useEffect(() => {
     const initAudio = async () => {
       try {
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
         audioContextRef.current = ctx;
 
-        // Load Synthesis
+        // 1. Moderator Voice (TTS)
         const voiceSource = result.voiceUrl || result.audioUrl;
         if (voiceSource) {
           let buffer: AudioBuffer | null = null;
@@ -96,14 +96,13 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
           audioBufferRef.current = buffer;
         }
 
-        // Load Music (Default or Custom)
-        // If no custom music, use a generic cinematic orchestral placeholder (or the browser handles local synth if available)
+        // 2. Background Music (Custom or Default Cinematic)
         const musicSource = result.backgroundMusicUrl || 'https://actions.google.com/static/audio/tracks/Epic_Cinematic_Saga.mp3';
         const musicResp = await fetch(musicSource);
         const musicArrayBuffer = await musicResp.arrayBuffer();
         musicBufferRef.current = await ctx.decodeAudioData(musicArrayBuffer);
       } catch (err) {
-        console.error("[Studio] Audio Initialization Error:", err);
+        console.error("[Studio] Audio Initialization Fault:", err);
       }
     };
 
@@ -116,7 +115,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     };
   }, [result.audioUrl, result.voiceUrl, result.backgroundMusicUrl]);
 
-  // Playback & Sync
+  // Handle Playback Synchronization
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -138,6 +137,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       if (!ctx || ctx.state === 'closed') return;
       if (ctx.state === 'suspended') ctx.resume();
 
+      // Play Background Cinematic Music (Looped)
       if (musicBufferRef.current) {
         const mSrc = ctx.createBufferSource();
         mSrc.buffer = musicBufferRef.current;
@@ -151,6 +151,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
         musicNodeRef.current = mSrc;
       }
 
+      // Play Moderator Narrator (Strictly Once)
       if (audioBufferRef.current) {
         if (offset < audioBufferRef.current.duration) {
           const vSrc = ctx.createBufferSource();
@@ -191,11 +192,12 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
   return (
     <div className="w-full max-w-4xl animate-in zoom-in duration-500">
       <div className="text-center mb-10">
-        <h2 className="text-5xl font-black mb-4 tracking-tighter text-white">Production Wrapped</h2>
-        <p className="text-gray-400 font-medium italic">"{result.params.message.substring(0, 80)}..."</p>
+        <h2 className="text-5xl font-black mb-4 tracking-tighter text-white uppercase italic">Production Wrapped</h2>
+        <p className="text-gray-400 font-medium italic opacity-60">Mastered with Cinematic Music & Audio-Sync</p>
       </div>
 
       <div className="relative group rounded-3xl overflow-hidden shadow-2xl shadow-blue-500/20 mb-8 aspect-video bg-black ring-1 ring-white/10">
+        {/* CRITICAL: Video is MUTED to kill hallucinated AI speech. Audio is handled by AudioContext Moderator & Music. */}
         <video 
           ref={videoRef}
           src={result.url} 
@@ -207,27 +209,28 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
           className="w-full h-full object-contain"
         />
 
-        {/* Captions Layer */}
+        {/* Captions Layer - Centered Bottom */}
         {showCaptions && (
-          <div className="absolute bottom-16 left-0 right-0 px-8 flex justify-center pointer-events-none">
-            <div className="bg-black/60 backdrop-blur-md px-6 py-3 rounded-2xl text-white text-center text-lg font-bold border border-white/10 shadow-2xl max-w-[80%]">
+          <div className="absolute bottom-16 left-0 right-0 px-10 flex justify-center pointer-events-none">
+            <div className="bg-black/60 backdrop-blur-xl px-8 py-4 rounded-3xl text-white text-center text-xl font-bold border border-white/20 shadow-2xl max-w-[85%] leading-tight">
               {result.params.message}
             </div>
           </div>
         )}
 
+        {/* HUD Info / Controls */}
         <div className="absolute top-4 right-4 flex flex-col gap-2 items-end">
-          <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md ${isCloudLink ? 'bg-blue-600/80' : 'bg-yellow-600/80'}`}>
-            {isCloudLink ? <><Globe size={10} /> Cloud Link</> : <><Volume2 size={10} /> Local Link</>}
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md ${isCloudLink ? 'bg-blue-600/80' : 'bg-yellow-600/80'}`}>
+            {isCloudLink ? <><Globe size={12} /> Cloud Master</> : <><Volume2 size={12} /> Local Preview</>}
           </div>
-          <div className="flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md bg-green-600/80">
-            <Volume2 size={10} /> Moderator Active
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md bg-green-600/80">
+            <Music size={12} /> Cinematic Audio Mix
           </div>
           <button 
             onClick={() => setShowCaptions(!showCaptions)}
-            className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md transition-all ${showCaptions ? 'bg-blue-600' : 'bg-gray-800/80'}`}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md transition-all ${showCaptions ? 'bg-blue-600 shadow-lg' : 'bg-gray-800/80 hover:bg-gray-700'}`}
           >
-            <Type size={10} /> {showCaptions ? 'Captions ON' : 'Captions OFF'}
+            <Type size={12} /> {showCaptions ? 'Captions ON' : 'Captions OFF'}
           </button>
         </div>
       </div>
@@ -248,16 +251,16 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
               const email = prompt("Recipient Google Email:");
               if (email && onInternalShare) onInternalShare(email.trim());
             }} className="flex items-center justify-center gap-3 p-4 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-2xl font-bold text-sm hover:bg-blue-600/20">
-              <Users size={18} /> Send to Friend
+              <Users size={18} /> Group Share
             </button>
           </div>
         </div>
         <div className="flex flex-col gap-4 justify-center">
-          <button onClick={onRestart} className="w-full py-5 bg-blue-600 text-white font-black rounded-3xl flex items-center justify-center gap-3 hover:bg-blue-500 transition-all text-lg uppercase tracking-wider">
-            <RefreshCw size={22} /> Start New
+          <button onClick={onRestart} className="w-full py-5 bg-blue-600 text-white font-black rounded-3xl flex items-center justify-center gap-3 hover:bg-blue-500 transition-all text-lg uppercase tracking-wider shadow-2xl shadow-blue-600/20">
+            <RefreshCw size={22} /> New Production
           </button>
           <button onClick={onGoGallery} className="w-full py-5 bg-white/5 border border-white/10 font-black rounded-3xl flex items-center justify-center gap-3 hover:bg-white/10 transition-all text-gray-400 hover:text-white uppercase tracking-wider">
-            <LayoutGrid size={22} /> Go to Library
+            <LayoutGrid size={22} /> Return to Library
           </button>
         </div>
       </div>
