@@ -49,18 +49,16 @@ export const generateGreetingVideo = async (
     : (params.occasion !== Occasion.NONE ? `Visual Theme: ${params.theme}` : '');
 
   const lipSyncInstruction = params.userPhoto 
-    ? "The character from the reference image is looking at the camera and speaking the script naturally. Ensure realistic mouth movements, lip-syncing, and facial expressions that match the cadence of a person talking."
-    : "Ensure the visual narrative features elements that appear to be communicating or expressing the message visually.";
-
-  const scriptContext = `Video Script Content: "${params.message}"`;
+    ? "The character from the reference image is looking directly at the camera. Their mouth and facial muscles must move in perfect synchronization with the spoken dialogue. Animate the lips, jaw, and eyes to express the emotion of the script."
+    : "The visual narrative must feature central elements that express the script's emotion through movement and cinematic framing.";
 
   const cinematicPrompt = `
     A professional cinematic production.
     ${visualContext}. 
     ${lipSyncInstruction}
     Style: 8k resolution, professional film lighting, high-quality facial textures.
-    Narrative context: ${scriptContext}
-    IMPORTANT: The video should be silent or contain only atmospheric ambient noise; do not generate any synthetic voices or speech in the video file itself.
+    Narrative Script Context: "${params.message}"
+    IMPORTANT: The video file itself should be silent or contain only faint atmospheric ambient sounds. Do not generate overlapping synthetic voices.
   `.trim();
 
   const config: any = {
@@ -102,7 +100,7 @@ export const generateGreetingVideo = async (
 
       const extensionPayload = {
         model: 'veo-3.1-generate-preview',
-        prompt: `Continue the cinematic shot. The character continues speaking and expressing the message: "${params.message.substring(0, 100)}...". Maintain perfect lip-sync and character consistency.`,
+        prompt: `Continue the cinematic shot. The character continues speaking. Mouth movements must be highly detailed and match the script flow: "${params.message.substring(0, 100)}...". Maintain character consistency.`,
         video: currentVideoAsset,
         config: {
           numberOfVideos: 1,
@@ -141,8 +139,9 @@ export const generateGreetingVideo = async (
 
 /**
  * Generates audio for a greeting message using Gemini TTS.
+ * Stylizes the voice tone based on the environment and character context.
  */
-export const generateGreetingVoice = async (text: string, voice: VoiceGender): Promise<{ base64: string, duration: number, blob: Blob } | null> => {
+export const generateGreetingVoice = async (params: GenerateGreetingParams): Promise<{ base64: string, duration: number, blob: Blob } | null> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const voiceMap: Record<VoiceGender, string> = {
@@ -152,8 +151,17 @@ export const generateGreetingVoice = async (text: string, voice: VoiceGender): P
   };
 
   try {
-    // EXTRA STRICT PROMPT for TTS to avoid "hallucinated repetition"
-    const ttsPrompt = `Read this script exactly as written. Speak clearly and naturally. Do not repeat words, do not stutter, and do not loop phrases. Read exactly once: "${text}"`;
+    // Determine tone based on environment/occasion
+    const environment = params.scenicDescription || params.theme || "Cinematic Studio";
+    const toneContext = `In a style that matches a ${environment} environment and is appropriate for a ${params.occasion} occasion.`;
+
+    const ttsPrompt = `
+      ${toneContext}
+      Read the following script exactly as written. 
+      Speak clearly, naturally, and with high-quality cinematic presence. 
+      DO NOT repeat any words or phrases. Read once from beginning to end.
+      Script: "${params.message}"
+    `.trim();
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",
@@ -162,7 +170,7 @@ export const generateGreetingVoice = async (text: string, voice: VoiceGender): P
         responseModalities: [Modality.AUDIO],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: voiceMap[voice] },
+            prebuiltVoiceConfig: { voiceName: voiceMap[params.voice] },
           },
         },
       },

@@ -113,13 +113,13 @@ const App: React.FC = () => {
     setAppState(AppState.LOADING);
     
     try {
-      // 1. Generate Voice (TTS) - Improved with strict prompt
-      const voiceResult = await generateGreetingVoice(params.message, params.voice);
+      // 1. Generate Voice (TTS) - Improved with stylized tone matching
+      const voiceResult = await generateGreetingVoice(params);
       const audioDuration = voiceResult?.duration || 7;
       const audioBase64 = voiceResult?.base64;
       const voiceBlob = voiceResult?.blob;
 
-      // 2. Generate Cinematic Video (Extended logic)
+      // 2. Generate Cinematic Video
       const { blob } = await generateGreetingVideo({ 
         ...params, 
         audioDuration 
@@ -186,7 +186,7 @@ const App: React.FC = () => {
         url: videoUrl, 
         params, 
         record: newRecord,
-        audioUrl: !voiceUrl ? audioBase64 : undefined, // Only pass base64 if cloud upload failed
+        audioUrl: !voiceUrl ? audioBase64 : undefined,
         voiceUrl: voiceUrl,
         backgroundMusicUrl: musicUrl
       });
