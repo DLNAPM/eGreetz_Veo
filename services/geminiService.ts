@@ -40,7 +40,7 @@ export const generateGreetingVideo = async (
   }
 
   const needsExtension = targetDuration > segmentLength;
-  const modelToUse = (needsExtension || params.userPhoto) 
+  const modelToUse = (needsExtension || params.userPhoto || params.scenePhoto) 
     ? 'veo-3.1-generate-preview' 
     : 'veo-3.1-fast-generate-preview';
 
@@ -72,14 +72,28 @@ export const generateGreetingVideo = async (
     config: config,
   };
 
+  const referenceImages: any[] = [];
   if (params.userPhoto) {
-    initialPayload.config.referenceImages = [{
+    referenceImages.push({
       image: {
         imageBytes: params.userPhoto.base64,
         mimeType: params.userPhoto.file.type || 'image/jpeg',
       },
       referenceType: VideoGenerationReferenceType.ASSET,
-    }];
+    });
+  }
+  if (params.scenePhoto) {
+    referenceImages.push({
+      image: {
+        imageBytes: params.scenePhoto.base64,
+        mimeType: params.scenePhoto.file.type || 'image/jpeg',
+      },
+      referenceType: VideoGenerationReferenceType.ASSET,
+    });
+  }
+
+  if (referenceImages.length > 0) {
+    initialPayload.config.referenceImages = referenceImages;
   }
 
   try {

@@ -113,13 +113,11 @@ const App: React.FC = () => {
     setAppState(AppState.LOADING);
     
     try {
-      // 1. Generate Voice (TTS) - Improved with stylized tone matching
       const voiceResult = await generateGreetingVoice(params);
       const audioDuration = voiceResult?.duration || 7;
       const audioBase64 = voiceResult?.base64;
       const voiceBlob = voiceResult?.blob;
 
-      // 2. Generate Cinematic Video
       const { blob } = await generateGreetingVideo({ 
         ...params, 
         audioDuration 
@@ -218,6 +216,7 @@ const App: React.FC = () => {
         scenicDescription: greeting.scenicDescription,
         voice: greeting.voice || VoiceGender.FEMALE, 
         userPhoto: null,
+        scenePhoto: null,
         backgroundMusic: null,
         model: VeoModel.VEO_FAST,
         aspectRatio: AspectRatio.LANDSCAPE,

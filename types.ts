@@ -106,6 +106,7 @@ export interface GenerateGreetingParams {
   scenicDescription?: string;
   voice: VoiceGender;
   userPhoto: ImageFile | null;
+  scenePhoto: ImageFile | null;
   backgroundMusic: AudioFile | null;
   model: VeoModel;
   aspectRatio: AspectRatio;

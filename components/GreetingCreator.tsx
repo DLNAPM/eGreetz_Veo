@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Occasion, GreetingTheme, VoiceGender, GenerateGreetingParams, ImageFile, AudioFile, VeoModel, AspectRatio, GreetingRecord } from '../types';
-import { Mic, Upload, X, Sparkles, Wand2, ChevronLeft, Clock, Zap, HelpCircle, ChevronDown, Calendar, Wind, PenTool, Music } from 'lucide-react';
+import { Mic, Upload, X, Sparkles, Wand2, ChevronLeft, Clock, Zap, HelpCircle, ChevronDown, Calendar, Wind, PenTool, Music, Image as ImageIcon } from 'lucide-react';
 import HelpModal from './HelpModal';
 
 interface Props {
@@ -17,15 +17,16 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
   const [scenicDescription, setScenicDescription] = useState('');
   const [voice, setVoice] = useState<VoiceGender>(VoiceGender.FEMALE);
   const [photo, setPhoto] = useState<ImageFile | null>(null);
+  const [scenePhoto, setScenePhoto] = useState<ImageFile | null>(null);
   const [audioFile, setAudioFile] = useState<AudioFile | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [extended, setExtended] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const sceneInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
 
-  // Sorting logic for enums: 'None' always first, then A-Z
   const sortedOccasions = [
     Occasion.NONE,
     ...Object.values(Occasion)
@@ -35,7 +36,6 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
   
   const sortedThemes = Object.values(GreetingTheme).sort((a, b) => a.localeCompare(b));
 
-  // Initialize from initialData if editing
   useEffect(() => {
     if (initialData) {
       setOccasion(initialData.occasion);
@@ -52,6 +52,17 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
       const reader = new FileReader();
       reader.onload = () => {
         setPhoto({ file, base64: (reader.result as string).split(',')[1] });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSceneUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setScenePhoto({ file, base64: (reader.result as string).split(',')[1] });
       };
       reader.readAsDataURL(file);
     }
@@ -119,10 +130,9 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
       </div>
 
       <div className="space-y-8">
-        {/* SELECT OCCASION DROPDOWN */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="relative group">
-            <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Select Occasion (None First, then A-Z)</label>
+            <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Select Occasion</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-blue-500">
                 <Calendar size={18} />
@@ -145,7 +155,7 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
           </div>
 
           <div className="relative group">
-            <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Atmospheric Environment (A-Z)</label>
+            <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Atmospheric Environment</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-blue-500">
                 <Wind size={18} />
@@ -168,24 +178,47 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
           </div>
         </div>
 
-        {/* CUSTOM SCENIC DESCRIPTION */}
         <div>
-          <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Scenic Description (Optional - Overrides Environment)</label>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-blue-500">
-              <PenTool size={18} />
+          <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Scenic Description & Visual Reference</label>
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="relative flex-grow">
+              <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-blue-500">
+                <PenTool size={18} />
+              </div>
+              <input
+                type="text"
+                value={scenicDescription}
+                onChange={(e) => setScenicDescription(e.target.value)}
+                placeholder="Describe the background or upload a scene photo..."
+                className="w-full bg-[#0a0a0c] border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 hover:bg-white/5 transition-all placeholder-gray-700 h-full"
+              />
             </div>
-            <input
-              type="text"
-              value={scenicDescription}
-              onChange={(e) => setScenicDescription(e.target.value)}
-              placeholder="e.g. A futuristic city with holographic neon signs and rain..."
-              className="w-full bg-[#0a0a0c] border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 hover:bg-white/5 transition-all placeholder-gray-700"
-            />
+            
+            <div className="shrink-0">
+              {scenePhoto ? (
+                <div className="relative w-32 h-14 rounded-2xl overflow-hidden border border-white/10 bg-[#0a0a0c]">
+                  <img src={URL.createObjectURL(scenePhoto.file)} alt="Scene" className="w-full h-full object-cover opacity-60" />
+                  <button 
+                    onClick={() => setScenePhoto(null)}
+                    className="absolute inset-0 flex items-center justify-center bg-black/40 hover:bg-black/60 transition-colors text-white"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : (
+                <button 
+                  onClick={() => sceneInputRef.current?.click()}
+                  className="w-32 h-14 bg-[#0a0a0c] border-2 border-dashed border-white/5 rounded-2xl flex flex-col items-center justify-center gap-1 text-gray-500 hover:text-blue-400 hover:bg-[#121214] transition-all"
+                >
+                  <ImageIcon size={18} className="opacity-30" />
+                  <span className="font-bold text-[8px] uppercase tracking-widest">Scene Ref</span>
+                </button>
+              )}
+              <input ref={sceneInputRef} type="file" className="hidden" accept="image/*" onChange={handleSceneUpload} />
+            </div>
           </div>
         </div>
 
-        {/* YOUR MESSAGE */}
         <div>
           <div className="flex justify-between items-center mb-3">
             <label className="text-xs font-bold text-gray-500 uppercase tracking-[0.2em]">Greeting Script</label>
@@ -209,7 +242,6 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
           </div>
         </div>
 
-        {/* Assets Upload Section */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="relative group">
             <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Character Reference (Optional)</label>
@@ -259,7 +291,7 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
                 className="w-full h-24 bg-[#0a0a0c] border-2 border-dashed border-white/5 rounded-2xl flex flex-col items-center justify-center gap-2 text-gray-500 hover:text-blue-400 hover:bg-[#121214] transition-all text-center px-4"
               >
                 <Music size={20} className="opacity-30" />
-                <span className="font-bold text-[10px] uppercase tracking-widest">Upload Custom Audio (.mp3, .m4a)</span>
+                <span className="font-bold text-[10px] uppercase tracking-widest">Upload Audio</span>
               </button>
             )}
             <input 
@@ -272,7 +304,6 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
           </div>
         </div>
 
-        {/* Duration & Voice Modulation */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
            <div className="relative group">
             <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Voice Modulation</label>
@@ -309,7 +340,6 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
           </div>
         </div>
 
-        {/* Actions Section */}
         <div className="pt-4">
           <button
             onClick={() => onGenerate({ 
@@ -319,6 +349,7 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
               scenicDescription,
               voice, 
               userPhoto: photo, 
+              scenePhoto,
               backgroundMusic: audioFile,
               model: VeoModel.VEO_FAST, 
               aspectRatio: AspectRatio.LANDSCAPE,
