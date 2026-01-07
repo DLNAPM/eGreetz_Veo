@@ -4,7 +4,7 @@ import {
   Modality,
   VideoGenerationReferenceType,
 } from '@google/genai';
-import { GenerateGreetingParams, VoiceGender, VeoModel, Occasion } from '../types';
+import { GenerateGreetingParams, VoiceGender, VeoModel, Occasion, GreetingTheme } from '../types';
 
 /**
  * Helper to decode base64 audio and get its duration in seconds.
@@ -44,7 +44,8 @@ export const generateGreetingVideo = async (
     ? 'veo-3.1-generate-preview' 
     : 'veo-3.1-fast-generate-preview';
 
-  const environment = params.scenicDescription || params.theme || "Cinematic Studio";
+  const effectiveTheme = params.theme === GreetingTheme.NONE ? "" : params.theme;
+  const environment = params.scenicDescription || effectiveTheme || "Cinematic Studio";
   const visualContext = `Visual Environment: ${environment}`;
 
   // DIRECTIVE: Explicitly command the model to keep the video SILENT and match lip-sync.
@@ -164,7 +165,8 @@ export const generateGreetingVoice = async (params: GenerateGreetingParams): Pro
   };
 
   try {
-    const environment = params.scenicDescription || params.theme || "Cinematic Hall";
+    const effectiveTheme = params.theme === GreetingTheme.NONE ? "" : params.theme;
+    const environment = params.scenicDescription || effectiveTheme || "Cinematic Hall";
     const voicePersona = `You are a character speaking from a ${environment} environment. Your voice should have the appropriate warmth, echo, and presence for this setting.`;
 
     const ttsPrompt = `

@@ -29,6 +29,7 @@ export enum Occasion {
 }
 
 export enum GreetingTheme {
+  NONE = 'None',
   BALLOONS = 'Balloons dropping',
   CHAMPAGNE = 'Champagne popping',
   FIREWORKS = 'Fireworks',

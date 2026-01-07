@@ -13,7 +13,7 @@ interface Props {
 const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData }) => {
   const [occasion, setOccasion] = useState<Occasion>(Occasion.NONE);
   const [message, setMessage] = useState('');
-  const [theme, setTheme] = useState<GreetingTheme>(GreetingTheme.BALLOONS);
+  const [theme, setTheme] = useState<GreetingTheme>(GreetingTheme.NONE);
   const [scenicDescription, setScenicDescription] = useState('');
   const [voice, setVoice] = useState<VoiceGender>(VoiceGender.FEMALE);
   const [photo, setPhoto] = useState<ImageFile | null>(null);
@@ -34,7 +34,12 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
       .sort((a, b) => a.localeCompare(b))
   ];
   
-  const sortedThemes = Object.values(GreetingTheme).sort((a, b) => a.localeCompare(b));
+  const sortedThemes = [
+    GreetingTheme.NONE,
+    ...Object.values(GreetingTheme)
+      .filter(t => t !== GreetingTheme.NONE)
+      .sort((a, b) => a.localeCompare(b))
+  ];
 
   useEffect(() => {
     if (initialData) {
