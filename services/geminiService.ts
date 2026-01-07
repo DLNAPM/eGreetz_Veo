@@ -24,7 +24,7 @@ async function getAudioDuration(base64Data: string): Promise<number> {
 }
 
 /**
- * Generates a cinematic greeting video with phonetic lip-sync and character focus.
+ * Generates a cinematic greeting video with phonetic lip-sync and enforced silence.
  */
 export const generateGreetingVideo = async (
   params: GenerateGreetingParams & { audioDuration?: number }
@@ -44,21 +44,20 @@ export const generateGreetingVideo = async (
     ? 'veo-3.1-generate-preview' 
     : 'veo-3.1-fast-generate-preview';
 
-  const visualContext = params.scenicDescription && params.scenicDescription.trim().length > 0 
-    ? `Visual Environment: ${params.scenicDescription}` 
-    : (params.occasion !== Occasion.NONE ? `Visual Theme: ${params.theme}` : '');
+  const environment = params.scenicDescription || params.theme || "Cinematic Studio";
+  const visualContext = `Visual Environment: ${environment}`;
 
+  // DIRECTIVE: Explicitly command the model to keep the video SILENT and match lip-sync.
   const lipSyncInstruction = params.userPhoto 
-    ? "LIP-SYNC FOCUS: The character from the reference image is speaking the script to the camera. Their lips, jaw, and facial muscles must move phonetically to match the spoken words. Ensure realistic facial expressions and natural blinking. The mouth must form the shapes of the words being spoken."
-    : "The visual narrative must feature central cinematic elements that reflect the script's emotion and narrative flow.";
+    ? `PHONETIC LIP-SYNC FOCUS: The character in the reference image is speaking directly to the lens. Their mouth, jaw, and facial expressions MUST move in perfect synchronization with the syllables of the script: "${params.message}". The character looks natural, with appropriate eye contact and emotional facial changes matching the tone of the message.`
+    : `The visuals must feature cinematic elements that dynamically react to the flow and emotion of the script: "${params.message}".`;
 
   const cinematicPrompt = `
-    ${params.occasion !== Occasion.NONE ? params.occasion : 'Awesome Cinematic Narrative'}.
+    High-end ${params.occasion !== Occasion.NONE ? params.occasion : 'Cinematic Masterpiece'} production.
     ${visualContext}. 
     ${lipSyncInstruction}
-    Style: Professional film production, 8k textures, cinematic lighting, epic framing.
-    Script Context: "${params.message}"
-    IMPORTANT: The video must be silent. DO NOT generate any voices, speech, or sounds in the video file.
+    Style: Professional 8k cinematography, realistic lighting, detailed textures.
+    IMPORTANT: The video file MUST BE SILENT. Do not generate any background voices, speech, or synthetic chatter. Only generate the visual narrative.
   `.trim();
 
   const config: any = {
@@ -100,7 +99,7 @@ export const generateGreetingVideo = async (
 
       const extensionPayload = {
         model: 'veo-3.1-generate-preview',
-        prompt: `Continue the cinematic shot. The character continues speaking clearly and naturally. Maintain consistent lip-sync for these words: "${params.message.substring(0, 150)}...". Keep character and lighting identical.`,
+        prompt: `Continue the cinematic shot. The character continues speaking with perfect lip-sync. Maintain lighting and facial consistency for the text: "${params.message.substring(0, 100)}...". The video must remain silent.`,
         video: currentVideoAsset,
         config: {
           numberOfVideos: 1,
@@ -139,7 +138,7 @@ export const generateGreetingVideo = async (
 
 /**
  * Generates audio for a greeting message using Gemini TTS.
- * Dynamically adjusts voice tone/persona based on environment context.
+ * Stylizes the voice to match the persona and environment.
  */
 export const generateGreetingVoice = async (params: GenerateGreetingParams): Promise<{ base64: string, duration: number, blob: Blob } | null> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -151,16 +150,12 @@ export const generateGreetingVoice = async (params: GenerateGreetingParams): Pro
   };
 
   try {
-    // Determine tone based on environment and occasion
-    const environment = params.scenicDescription || params.theme || "Cinematic Stage";
-    const toneDescription = params.occasion === Occasion.SYMPATHY ? "somber, soft, and respectful" 
-                           : params.occasion === Occasion.BIRTHDAY ? "excited, warm, and cheerful"
-                           : "professional, clear, and cinematic";
+    const environment = params.scenicDescription || params.theme || "Cinematic Hall";
+    const voicePersona = `You are a character speaking from a ${environment} environment. Your voice should have the appropriate warmth, echo, and presence for this setting.`;
 
     const ttsPrompt = `
-      PERSONA: You are the Moderator speaking from a ${environment} environment. 
-      TONE: Adopt a ${toneDescription} voice that matches the scene perfectly. 
-      INSTRUCTION: Read the script exactly as written. NO repetitions. NO loops. Speak naturally with high-quality cinematic presence.
+      ${voicePersona}
+      INSTRUCTION: Read the following script exactly as written. NO repetitions. Speak naturally and clearly with cinematic presence.
       SCRIPT: "${params.message}"
     `.trim();
 

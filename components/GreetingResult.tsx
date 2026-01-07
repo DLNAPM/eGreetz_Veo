@@ -69,14 +69,14 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     }
   }, [shareUrl]);
 
-  // Load Audio Assets: Narrator and Background Music
+  // Unified Audio Asset Loading
   useEffect(() => {
     const initAudio = async () => {
       try {
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
         audioContextRef.current = ctx;
 
-        // 1. Moderator Voice (TTS)
+        // 1. Load Moderator Voice
         const voiceSource = result.voiceUrl || result.audioUrl;
         if (voiceSource) {
           let buffer: AudioBuffer | null = null;
@@ -96,13 +96,13 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
           audioBufferRef.current = buffer;
         }
 
-        // 2. Background Music (Custom or Default Cinematic)
+        // 2. Load Cinematic Music
         const musicSource = result.backgroundMusicUrl || 'https://actions.google.com/static/audio/tracks/Epic_Cinematic_Saga.mp3';
         const musicResp = await fetch(musicSource);
         const musicArrayBuffer = await musicResp.arrayBuffer();
         musicBufferRef.current = await ctx.decodeAudioData(musicArrayBuffer);
       } catch (err) {
-        console.error("[Studio] Audio Initialization Fault:", err);
+        console.error("[Studio] Audio System Error:", err);
       }
     };
 
@@ -115,12 +115,12 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     };
   }, [result.audioUrl, result.voiceUrl, result.backgroundMusicUrl]);
 
-  // Handle Playback Synchronization
+  // Audio/Video Sync Controller
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    const stopNodes = () => {
+    const stopAudioNodes = () => {
       if (sourceNodeRef.current) {
         try { sourceNodeRef.current.stop(); } catch (e) {}
         sourceNodeRef.current = null;
@@ -131,19 +131,19 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       }
     };
 
-    const playNodes = (offset: number) => {
-      stopNodes();
+    const playAudioNodes = (offset: number) => {
+      stopAudioNodes();
       const ctx = audioContextRef.current;
       if (!ctx || ctx.state === 'closed') return;
       if (ctx.state === 'suspended') ctx.resume();
 
-      // Play Background Cinematic Music (Looped)
+      // Play Cinematic Music (Looping)
       if (musicBufferRef.current) {
         const mSrc = ctx.createBufferSource();
         mSrc.buffer = musicBufferRef.current;
         mSrc.loop = true;
         const mGain = ctx.createGain();
-        mGain.gain.value = 0.35; // Cinematic background volume
+        mGain.gain.value = 0.3; // High-quality cinematic mix
         mGain.connect(ctx.destination);
         mSrc.connect(mGain);
         const mStart = Math.max(0, offset % musicBufferRef.current.duration);
@@ -151,7 +151,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
         musicNodeRef.current = mSrc;
       }
 
-      // Play Moderator Narrator (Strictly Once)
+      // Play Moderator (Strictly Sync'd)
       if (audioBufferRef.current) {
         if (offset < audioBufferRef.current.duration) {
           const vSrc = ctx.createBufferSource();
@@ -163,10 +163,10 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       }
     };
 
-    const handlePlay = () => playNodes(video.currentTime);
-    const handlePause = () => stopNodes();
+    const handlePlay = () => playAudioNodes(video.currentTime);
+    const handlePause = () => stopAudioNodes();
     const handleSeek = () => {
-      if (!video.paused) playNodes(video.currentTime);
+      if (!video.paused) playAudioNodes(video.currentTime);
     };
 
     video.addEventListener('play', handlePlay);
@@ -179,7 +179,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('seeked', handleSeek);
       video.removeEventListener('waiting', handlePause);
-      stopNodes();
+      stopAudioNodes();
     };
   }, []);
 
@@ -193,35 +193,35 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     <div className="w-full max-w-4xl animate-in zoom-in duration-500">
       <div className="text-center mb-10">
         <h2 className="text-5xl font-black mb-4 tracking-tighter text-white uppercase italic">Production Wrapped</h2>
-        <p className="text-gray-400 font-medium italic opacity-60">Mastered with Cinematic Music & Audio-Sync</p>
+        <p className="text-gray-400 font-medium italic opacity-60 italic">"{result.params.message.substring(0, 80)}..."</p>
       </div>
 
       <div className="relative group rounded-3xl overflow-hidden shadow-2xl shadow-blue-500/20 mb-8 aspect-video bg-black ring-1 ring-white/10">
-        {/* CRITICAL: Video is MUTED to kill hallucinated AI speech. Audio is handled by AudioContext Moderator & Music. */}
+        {/* FORCE MUTED on video element to kill the second voice. Moderator audio is handled by AudioContext. */}
         <video 
           ref={videoRef}
           src={result.url} 
           controls 
           autoPlay 
           loop 
-          muted
+          muted 
           crossOrigin="anonymous"
           className="w-full h-full object-contain"
         />
 
-        {/* Captions Layer - Centered Bottom */}
+        {/* Cinematic Captioning Overlay */}
         {showCaptions && (
           <div className="absolute bottom-16 left-0 right-0 px-10 flex justify-center pointer-events-none">
-            <div className="bg-black/60 backdrop-blur-xl px-8 py-4 rounded-3xl text-white text-center text-xl font-bold border border-white/20 shadow-2xl max-w-[85%] leading-tight">
+            <div className="bg-black/60 backdrop-blur-xl px-10 py-5 rounded-3xl text-white text-center text-xl font-black border border-white/20 shadow-2xl max-w-[90%] leading-relaxed tracking-tight">
               {result.params.message}
             </div>
           </div>
         )}
 
-        {/* HUD Info / Controls */}
+        {/* Info & Toggles HUD */}
         <div className="absolute top-4 right-4 flex flex-col gap-2 items-end">
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md ${isCloudLink ? 'bg-blue-600/80' : 'bg-yellow-600/80'}`}>
-            {isCloudLink ? <><Globe size={12} /> Cloud Master</> : <><Volume2 size={12} /> Local Preview</>}
+            {isCloudLink ? <><Globe size={12} /> Cloud Master</> : <><Volume2 size={12} /> Local Production</>}
           </div>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md bg-green-600/80">
             <Music size={12} /> Cinematic Audio Mix
@@ -251,16 +251,16 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
               const email = prompt("Recipient Google Email:");
               if (email && onInternalShare) onInternalShare(email.trim());
             }} className="flex items-center justify-center gap-3 p-4 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-2xl font-bold text-sm hover:bg-blue-600/20">
-              <Users size={18} /> Group Share
+              <Users size={18} /> Direct Send
             </button>
           </div>
         </div>
         <div className="flex flex-col gap-4 justify-center">
           <button onClick={onRestart} className="w-full py-5 bg-blue-600 text-white font-black rounded-3xl flex items-center justify-center gap-3 hover:bg-blue-500 transition-all text-lg uppercase tracking-wider shadow-2xl shadow-blue-600/20">
-            <RefreshCw size={22} /> New Production
+            <RefreshCw size={22} /> New Masterpiece
           </button>
           <button onClick={onGoGallery} className="w-full py-5 bg-white/5 border border-white/10 font-black rounded-3xl flex items-center justify-center gap-3 hover:bg-white/10 transition-all text-gray-400 hover:text-white uppercase tracking-wider">
-            <LayoutGrid size={22} /> Return to Library
+            <LayoutGrid size={22} /> View Library
           </button>
         </div>
       </div>
