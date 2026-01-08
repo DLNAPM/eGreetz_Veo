@@ -1,4 +1,3 @@
-
 import {Video} from '@google/genai';
 
 export enum AppState {

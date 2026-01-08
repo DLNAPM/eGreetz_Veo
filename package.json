@@ -12,8 +12,8 @@
     "@google/genai": "^1.22.0",
     "firebase": "^10.8.0",
     "lucide-react": "^0.408.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "clsx": "^2.1.0",
     "tailwind-merge": "^2.2.1"
   },

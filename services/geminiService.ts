@@ -1,4 +1,3 @@
-
 import {
   GoogleGenAI,
   Modality,
@@ -16,6 +15,7 @@ async function getAudioDuration(base64Data: string): Promise<number> {
     for (let i = 0; i < binaryString.length; i++) {
       bytes[i] = binaryString.charCodeAt(i);
     }
+    // PCM 16bit 24kHz Mono is 2 bytes per sample
     const duration = (bytes.length / 2) / 24000; 
     return duration;
   } catch (e) {
@@ -33,93 +33,105 @@ export const generateGreetingVideo = async (
   
   const segmentLength = 7;
   const audioDuration = params.audioDuration || 7;
-  let targetDuration = Math.ceil(audioDuration) + 2; 
+  // Ensure video length matches audio duration with a slight buffer
+  let targetDuration = Math.ceil(audioDuration) + 1.5; 
   
   if (params.extended) {
     targetDuration = Math.max(targetDuration, 15);
   }
 
+  const hasReferences = !!(params.userPhoto || params.scenePhoto);
   const needsExtension = targetDuration > segmentLength;
-  const modelToUse = (needsExtension || params.userPhoto || params.scenePhoto) 
+  
+  // Rule: Multiple reference images requires veo-3.1-generate-preview and 16:9
+  const modelToUse = (needsExtension || hasReferences) 
     ? 'veo-3.1-generate-preview' 
     : 'veo-3.1-fast-generate-preview';
 
   const effectiveTheme = params.theme === GreetingTheme.NONE ? "" : params.theme;
   const environment = params.scenicDescription || effectiveTheme || "Cinematic Studio";
-  const visualContext = `Visual Environment: ${environment}`;
 
-  // DIRECTIVE: Explicitly command the model to keep the video SILENT and match lip-sync.
-  const lipSyncInstruction = params.userPhoto 
-    ? `PHONETIC LIP-SYNC FOCUS: The character in the reference image is speaking directly to the lens. Their mouth, jaw, and facial expressions MUST move in perfect synchronization with the syllables of the script: "${params.message}". The character looks natural, with appropriate eye contact and emotional facial changes matching the tone of the message.`
-    : `The visuals must feature cinematic elements that dynamically react to the flow and emotion of the script: "${params.message}".`;
-
-  const cinematicPrompt = `
+  const baseCinematicInstruction = `
     High-end ${params.occasion !== Occasion.NONE ? params.occasion : 'Cinematic Masterpiece'} production.
-    ${visualContext}. 
-    ${lipSyncInstruction}
+    Environment: ${environment}. 
     Style: Professional 8k cinematography, realistic lighting, detailed textures.
-    IMPORTANT: The video file MUST BE SILENT. Do not generate any background voices, speech, or synthetic chatter. Only generate the visual narrative.
+    CRITICAL: THE VIDEO FILE MUST BE COMPLETELY SILENT. NO AUDIO TRACKS, VOICES, OR AMBIENCE.
   `.trim();
 
-  const config: any = {
-    numberOfVideos: 1,
-    resolution: '720p',
-    aspectRatio: params.userPhoto ? '16:9' : params.aspectRatio,
-  };
+  const lipSyncInstruction = params.userPhoto 
+    ? `CHARACTER FOCUS: The character in the reference image is speaking directly to the lens. LIP-SYNC: Their mouth and jaw movements MUST move in perfect synchronization with the spoken greeting: "${params.message}". Maintain a natural, emotive performance.`
+    : `VISUAL SYNC: The environment and cinematic camera work should react dynamically to the rhythm and emotion of the spoken message: "${params.message}".`;
 
   const initialPayload: any = {
     model: modelToUse,
-    prompt: cinematicPrompt,
-    config: config,
+    prompt: `${baseCinematicInstruction}\n${lipSyncInstruction}`,
+    config: {
+      numberOfVideos: 1,
+      resolution: '720p',
+      // Ensure 16:9 if using slow model with references as per requirements
+      aspectRatio: (modelToUse === 'veo-3.1-generate-preview' && hasReferences) ? '16:9' : params.aspectRatio,
+    },
   };
 
   const referenceImages: any[] = [];
   if (params.userPhoto) {
     referenceImages.push({
-      image: {
-        imageBytes: params.userPhoto.base64,
-        mimeType: params.userPhoto.file.type || 'image/jpeg',
-      },
+      image: { imageBytes: params.userPhoto.base64, mimeType: params.userPhoto.file.type || 'image/jpeg' },
       referenceType: VideoGenerationReferenceType.ASSET,
     });
   }
   if (params.scenePhoto) {
     referenceImages.push({
-      image: {
-        imageBytes: params.scenePhoto.base64,
-        mimeType: params.scenePhoto.file.type || 'image/jpeg',
-      },
+      image: { imageBytes: params.scenePhoto.base64, mimeType: params.scenePhoto.file.type || 'image/jpeg' },
       referenceType: VideoGenerationReferenceType.ASSET,
     });
   }
-
   if (referenceImages.length > 0) {
     initialPayload.config.referenceImages = referenceImages;
   }
 
   try {
     let operation = await ai.models.generateVideos(initialPayload);
+    
+    // Polling with safety timeout and error checking
     while (!operation.done) {
       await new Promise((resolve) => setTimeout(resolve, 10000));
       operation = await ai.operations.getVideosOperation({ operation: operation });
+      
+      if (operation.error) {
+        const errorMsg = operation.error.message || "Unknown API error";
+        throw new Error(`Production Failed: ${errorMsg} (${operation.error.code})`);
+      }
     }
 
     let currentVideoAsset = operation.response?.generatedVideos?.[0]?.video;
-    if (!currentVideoAsset) throw new Error("Initial production failed.");
+    if (!currentVideoAsset) {
+      if (operation.error) {
+        throw new Error(`Production Error: ${operation.error.message}`);
+      }
+      throw new Error("Initial production failed: No video generated. This may be due to safety filters or account limitations.");
+    }
     
     let currentProducedDuration = segmentLength;
     
+    // Director's Cut: Extension Loop
     while (currentProducedDuration < targetDuration) {
-      await new Promise((resolve) => setTimeout(resolve, 45000));
+      const extensionPrompt = `
+        Continue the cinematic shot with absolute continuity. The character remains in the frame.
+        LIP-SYNC: Maintain the character's speaking performance for the ongoing greeting: "${params.message}".
+        Maintain identical lighting, character appearance, and facial structure from the previous segment.
+        The visual story MUST stay strictly related to the greeting message content.
+        CRITICAL: THE VIDEO MUST REMAIN SILENT.
+      `.trim();
 
       const extensionPayload = {
         model: 'veo-3.1-generate-preview',
-        prompt: `Continue the cinematic shot. The character continues speaking with perfect lip-sync. Maintain lighting and facial consistency for the text: "${params.message.substring(0, 100)}...". The video must remain silent.`,
+        prompt: extensionPrompt,
         video: currentVideoAsset,
         config: {
           numberOfVideos: 1,
           resolution: '720p',
-          aspectRatio: config.aspectRatio,
+          aspectRatio: initialPayload.config.aspectRatio,
         }
       };
 
@@ -127,6 +139,10 @@ export const generateGreetingVideo = async (
       while (!extendOp.done) {
         await new Promise((resolve) => setTimeout(resolve, 10000));
         extendOp = await ai.operations.getVideosOperation({ operation: extendOp });
+        
+        if (extendOp.error) {
+          throw new Error(`Extension Failed: ${extendOp.error.message}`);
+        }
       }
       
       const extendedAsset = extendOp.response?.generatedVideos?.[0]?.video;
@@ -141,19 +157,26 @@ export const generateGreetingVideo = async (
     const downloadLink = currentVideoAsset?.uri;
     if (downloadLink) {
       const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+      if (!response.ok) {
+        if (response.status === 404) throw new Error("Video asset not found. Please try again.");
+        throw new Error(`Failed to download video: ${response.statusText}`);
+      }
       const blob = await response.blob();
       return { objectUrl: URL.createObjectURL(blob), blob };
     }
   } catch (error: any) {
     console.error("[Studio] Video Production Failure:", error);
+    if (error.message?.includes("Requested entity was not found")) {
+      throw new Error("API Key or Project not found. Please re-select your paid API key.");
+    }
     throw error;
   }
-  throw new Error('Production pipeline failed.');
+  throw new Error('Production pipeline failed at final assembly.');
 };
 
 /**
  * Generates audio for a greeting message using Gemini TTS.
- * Stylizes the voice to match the persona and environment.
+ * Strictly enforces a cinematic narrator tone.
  */
 export const generateGreetingVoice = async (params: GenerateGreetingParams): Promise<{ base64: string, duration: number, blob: Blob } | null> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -166,12 +189,17 @@ export const generateGreetingVoice = async (params: GenerateGreetingParams): Pro
 
   try {
     const effectiveTheme = params.theme === GreetingTheme.NONE ? "" : params.theme;
-    const environment = params.scenicDescription || effectiveTheme || "Cinematic Hall";
-    const voicePersona = `You are a character speaking from a ${environment} environment. Your voice should have the appropriate warmth, echo, and presence for this setting.`;
+    const environment = params.scenicDescription || effectiveTheme || "Cinematic Studio";
+    
+    const voicePersona = `
+      PERSONA: You are a professional Cinematic Narrator with a clear, resonant, and emotive voice.
+      SETTING: You are narrating from a ${environment} environment.
+      STYLE: Clear, natural, and professional narration. 
+      CRITICAL: Read the ENTIRE script provided below. DO NOT skip words. DO NOT sing. DO NOT rap. Just speak naturally, clearly, and cinematically.
+    `.trim();
 
     const ttsPrompt = `
       ${voicePersona}
-      INSTRUCTION: Read the following script exactly as written. NO repetitions. Speak naturally and clearly with cinematic presence.
       SCRIPT: "${params.message}"
     `.trim();
 

@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   loginWithGoogle, 
   logout, 
@@ -40,10 +39,24 @@ const App: React.FC = () => {
   } | null>(null);
   const [editingGreeting, setEditingGreeting] = useState<GreetingRecord | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isAuthInitializing, setIsAuthInitializing] = useState(true);
   const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [isKeyConnected, setIsKeyConnected] = useState(false);
   const [isFirebaseReady, setIsFirebaseReady] = useState(false);
+
+  const loadData = useCallback(async (u: User) => {
+    try {
+      const [mine, received] = await Promise.all([
+        getUserGreetings(u.uid),
+        u.email ? getReceivedGreetings(u.email) : Promise.resolve([])
+      ]);
+      setMyGreetings(mine);
+      setReceivedGreetings(received);
+    } catch (err) {
+      console.error("Failed to load user data:", err);
+    }
+  }, []);
 
   useEffect(() => {
     const init = async () => {
@@ -62,11 +75,10 @@ const App: React.FC = () => {
 
     const unsubscribe = onAuthStateChangedListener((u) => {
       setUser(u);
+      setIsAuthInitializing(false);
       if (u) {
         loadData(u);
-        if (appState === AppState.AUTH) {
-          setAppState(AppState.GALLERY);
-        }
+        setAppState(AppState.GALLERY);
       } else {
         setAppState(AppState.AUTH);
       }
@@ -75,20 +87,7 @@ const App: React.FC = () => {
     return () => {
       if (typeof unsubscribe === 'function') unsubscribe();
     };
-  }, [appState]);
-
-  const loadData = async (u: User) => {
-    try {
-      const [mine, received] = await Promise.all([
-        getUserGreetings(u.uid),
-        u.email ? getReceivedGreetings(u.email) : Promise.resolve([])
-      ]);
-      setMyGreetings(mine);
-      setReceivedGreetings(received);
-    } catch (err) {
-      console.error("Failed to load user data:", err);
-    }
-  };
+  }, [loadData]);
 
   const handleRefresh = () => {
     if (user) loadData(user);
@@ -191,7 +190,18 @@ const App: React.FC = () => {
       setAppState(AppState.SUCCESS);
     } catch (e: any) {
       console.error("Production Error:", e);
-      alert("Production Error: " + e.toString());
+      
+      // Handle the "Requested entity was not found" error by prompting for key re-selection
+      if (e.message?.includes("API Key") || e.message?.includes("not found")) {
+        alert("Session or API key expired. Please re-select your Paid API Key.");
+        if (window.aistudio) {
+          setIsKeyConnected(false);
+          setShowApiKeyDialog(true);
+        }
+      } else {
+        alert("Production Error: " + e.message);
+      }
+      
       setAppState(user ? AppState.GALLERY : AppState.IDLE);
     } finally {
       setIsLoading(false);
@@ -225,6 +235,14 @@ const App: React.FC = () => {
     });
     setAppState(AppState.SUCCESS);
   };
+
+  if (isAuthInitializing) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-t-transparent border-blue-600 rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col font-sans selection:bg-blue-600/30">
@@ -286,7 +304,7 @@ const App: React.FC = () => {
         )}
 
         {appState === AppState.AUTH && (
-          <div className="flex-grow flex flex-col items-center justify-center text-center max-w-3xl animate-in fade-in zoom-in duration-1000">
+          <div className="flex-grow flex flex-col items-center justify-center text-center max-w-3xl animate-in fade-in zoom-in duration-1000 mt-20">
             <h2 className="text-7xl font-black mb-8 leading-[1] text-white tracking-tighter">Cinematic <span className="text-blue-600">Reimagined.</span></h2>
             <p className="text-2xl text-gray-400 mb-12 leading-relaxed font-medium">Create Hollywood-grade greetings. Personal persistent storage for your cinematic legacy.</p>
             <button onClick={user ? () => setAppState(AppState.IDLE) : loginWithGoogle} className="px-16 py-6 bg-blue-600 rounded-3xl text-2xl font-black hover:bg-blue-500 transition-all shadow-2xl shadow-blue-600/40 uppercase tracking-widest text-white">
@@ -296,14 +314,16 @@ const App: React.FC = () => {
         )}
 
         {appState === AppState.GALLERY && user && (
-          <GreetingGallery 
-            greetings={myGreetings} 
-            receivedGreetings={receivedGreetings}
-            onDelete={async (id) => { if(window.confirm("Delete?")) { await deleteGreeting(id); loadData(user); } }} 
-            onEdit={handleEdit}
-            onSelect={handleSelectGreeting}
-            onCreateNew={() => { setEditingGreeting(null); setAppState(AppState.IDLE); }}
-          />
+          <div className="w-full h-full flex flex-col">
+            <GreetingGallery 
+              greetings={myGreetings} 
+              receivedGreetings={receivedGreetings}
+              onDelete={async (id) => { if(window.confirm("Delete?")) { await deleteGreeting(id); loadData(user); } }} 
+              onEdit={handleEdit}
+              onSelect={handleSelectGreeting}
+              onCreateNew={() => { setEditingGreeting(null); setAppState(AppState.IDLE); }}
+            />
+          </div>
         )}
 
         {appState === AppState.IDLE && (
