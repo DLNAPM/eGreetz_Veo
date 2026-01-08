@@ -32,18 +32,16 @@ async function decodePCM(
   sampleRate: number,
   numChannels: number,
 ): Promise<AudioBuffer> {
-  // Ensure we have a clean view of the data
   const bufferCopy = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
   const dataInt16 = new Int16Array(bufferCopy);
   const frameCount = dataInt16.length / numChannels;
   
-  // Create a buffer at the data's native sample rate
+  // Create a buffer at the data's native sample rate (Gemini TTS is 24kHz)
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
 
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
-      // Direct conversion with clamping to avoid distortion
       const sample = dataInt16[i * numChannels + channel] / 32768.0;
       channelData[i] = Math.max(-1, Math.min(1, sample));
     }
@@ -68,31 +66,41 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
 
   useEffect(() => {
     if (navigator.share && navigator.canShare) {
-      const shareData = { title: 'eGreetz', text: 'Greeting!', url: shareUrl };
+      const shareData = { title: 'eGreetz', text: 'Cinematic Greeting!', url: shareUrl };
       setCanNativeShare(navigator.canShare(shareData));
     }
-  }, [shareUrl]);
+    
+    // Media Session API: Tell iOS/Android this is high-quality media, not a phone call/moderator voice
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: result.params.occasion || 'Cinematic Greeting',
+        artist: 'eGreetz Studio',
+        album: 'AI Cinematic Productions',
+      });
+    }
+  }, [shareUrl, result.params.occasion]);
 
   // Unified Audio Asset Loading
   useEffect(() => {
     const initAudio = async () => {
       try {
-        // iOS CRITICAL: Use 'playback' hint to avoid 'communication' (moderator) mode
+        // High-Quality Initialization: 
+        // 1. latencyHint: 'playback' avoids low-quality "communication" mode (moderator voice).
+        // 2. Omitting sampleRate allows the browser to use the device's native high-res rate.
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({
-          latencyHint: 'playback',
-          sampleRate: 48000 // Standard high-quality hardware rate
+          latencyHint: 'playback'
         });
         
         audioContextRef.current = ctx;
 
-        // 1. Load Moderator Voice
+        // 1. Load Spokesperson Voice (Generated via Gemini)
         const voiceSource = result.voiceUrl || result.audioUrl;
         if (voiceSource) {
           let buffer: AudioBuffer | null = null;
           if (voiceSource.startsWith('data:') || !voiceSource.startsWith('http')) {
             const cleanBase64 = voiceSource.replace(/^data:audio\/(wav|pcm);base64,/, '');
             const bytes = decodeBase64(cleanBase64);
-            // Gemini TTS returns PCM at 24000Hz
+            // Gemini TTS returns 16-bit PCM mono at 24000Hz
             buffer = await decodePCM(bytes, ctx, 24000, 1);
           } else {
             const resp = await fetch(voiceSource);
@@ -100,20 +108,19 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
             try {
               buffer = await ctx.decodeAudioData(arrayBuffer);
             } catch {
-              // Fallback for raw PCM stored in Firebase
               buffer = await decodePCM(new Uint8Array(arrayBuffer), ctx, 24000, 1);
             }
           }
           audioBufferRef.current = buffer;
         }
 
-        // 2. Load Cinematic Music
+        // 2. Load Cinematic Background Track
         const musicSource = result.backgroundMusicUrl || 'https://actions.google.com/static/audio/tracks/Epic_Cinematic_Saga.mp3';
         const musicResp = await fetch(musicSource);
         const musicArrayBuffer = await musicResp.arrayBuffer();
         musicBufferRef.current = await ctx.decodeAudioData(musicArrayBuffer);
       } catch (err) {
-        console.error("[Studio] Audio System Error:", err);
+        console.error("[Studio] Audio Initialization Error:", err);
       }
     };
 
@@ -126,7 +133,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     };
   }, [result.audioUrl, result.voiceUrl, result.backgroundMusicUrl]);
 
-  // Audio/Video Sync Controller
+  // Global Audio/Video Sync Controller
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -147,18 +154,18 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       const ctx = audioContextRef.current;
       if (!ctx || ctx.state === 'closed') return;
       
-      // Ensure context is running (iOS required gesture)
+      // Crucial for iOS: resume context inside the play event handler
       if (ctx.state === 'suspended') {
         await ctx.resume();
       }
 
-      // Play Cinematic Music (Looping)
+      // Layer 1: Atmospheric Music
       if (musicBufferRef.current) {
         const mSrc = ctx.createBufferSource();
         mSrc.buffer = musicBufferRef.current;
         mSrc.loop = true;
         const mGain = ctx.createGain();
-        mGain.gain.value = 0.35; // Cinematic balance
+        mGain.gain.value = 0.28; // Cinematic background volume
         mGain.connect(ctx.destination);
         mSrc.connect(mGain);
         const mStart = Math.max(0, offset % musicBufferRef.current.duration);
@@ -166,12 +173,15 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
         musicNodeRef.current = mSrc;
       }
 
-      // Play Voice-over (Sync'd)
+      // Layer 2: Primary Voice-over (Human Quality)
       if (audioBufferRef.current) {
         if (offset < audioBufferRef.current.duration) {
           const vSrc = ctx.createBufferSource();
           vSrc.buffer = audioBufferRef.current;
-          vSrc.connect(ctx.destination);
+          const vGain = ctx.createGain();
+          vGain.gain.value = 1.0;
+          vGain.connect(ctx.destination);
+          vSrc.connect(vGain);
           vSrc.start(0, offset);
           sourceNodeRef.current = vSrc;
         }
@@ -208,7 +218,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     <div className="w-full max-w-4xl animate-in zoom-in duration-500">
       <div className="text-center mb-10">
         <h2 className="text-5xl font-black mb-4 tracking-tighter text-white uppercase italic">Production Wrapped</h2>
-        <p className="text-gray-400 font-medium italic opacity-60 italic">"{result.params.message.substring(0, 80)}..."</p>
+        <p className="text-gray-400 font-medium italic opacity-60">"{result.params.message.substring(0, 80)}..."</p>
       </div>
 
       <div className="relative group rounded-3xl overflow-hidden shadow-2xl shadow-blue-500/20 mb-8 aspect-video bg-black ring-1 ring-white/10">
