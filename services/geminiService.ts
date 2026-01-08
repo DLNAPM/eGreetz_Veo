@@ -33,8 +33,9 @@ export const generateGreetingVideo = async (
   
   const segmentLength = 7;
   const audioDuration = params.audioDuration || 7;
-  // Director's Rule: Ensure video length is always longer than audio (buffer of 2.5s)
-  let targetDuration = Math.ceil(audioDuration) + 2.5; 
+  // Director's Rule: Ensure video length is always significantly longer than audio to avoid cut-offs.
+  // Using a 3.5s buffer to account for model performance variability.
+  let targetDuration = Math.ceil(audioDuration) + 3.5; 
   
   if (params.extended) {
     targetDuration = Math.max(targetDuration, 15);
@@ -58,7 +59,7 @@ export const generateGreetingVideo = async (
   `.trim();
 
   const lipSyncInstruction = params.userPhoto 
-    ? `CHARACTER FOCUS: The character in the reference image is speaking directly to the lens. LIP-SYNC: Their mouth and jaw movements MUST move in perfect synchronization with the spoken greeting: "${params.message}". Read the WHOLE message.`
+    ? `CHARACTER FOCUS: The character in the reference image is speaking directly to the lens. LIP-SYNC: Their mouth and jaw movements MUST move in perfect synchronization with the spoken greeting: "${params.message}". Narrate the ENTIRE script.`
     : `VISUAL SYNC: The environment and cinematic camera work should react dynamically to the rhythm and emotion of the spoken message: "${params.message}".`;
 
   const initialPayload: any = {
@@ -170,17 +171,17 @@ export const generateGreetingVoice = async (params: GenerateGreetingParams): Pro
     const effectiveTheme = params.theme === GreetingTheme.NONE ? "" : params.theme;
     const environment = params.scenicDescription || effectiveTheme || "Cinematic Studio";
     
-    // STRONGEST POSSIBLE INSTRUCTION: Ensure full script narration and high-fidelity tone
+    // MANDATORY: Explicit instruction to speak EVERY word of the script to avoid truncation on any platform.
     const voicePersona = `
-      NARRATOR PERSONA: Professional, high-end cinematic storyteller. Voice is rich, human-like, and deeply resonant.
-      TONE: Warm, natural, and prestigious. Avoid flat, robotic, or "moderator" styles.
-      ENVIRONMENT: Resonating in a ${environment}.
-      MANDATORY INSTRUCTION: You MUST dictate the ENTIRE script provided below from start to finish. Do NOT truncate, do NOT summarize, and do NOT skip any words. Every single syllable of the provided text must be clearly spoken.
+      NARRATOR PERSONA: Professional, high-end cinematic storyteller. Voice is rich, human-like, resonant, and natural.
+      TONE: Prestigious and human. Strictly AVOID robotic, moderator, or "virtual assistant" styles.
+      ENVIRONMENT: Resonating in a high-quality ${environment} acoustic space.
+      MANDATORY INSTRUCTION: You MUST dictate the ENTIRE script provided below. Do NOT shorten it. Every single word of the provided message must be spoken clearly and cinematically.
     `.trim();
 
     const ttsPrompt = `
       ${voicePersona}
-      FULL SCRIPT TO NARRATE: "${params.message}"
+      SCRIPT TO DICTATE IN FULL: "${params.message}"
     `.trim();
 
     const response = await ai.models.generateContent({

@@ -26,6 +26,10 @@ function decodeBase64(base64: string) {
   return bytes;
 }
 
+/**
+ * Decodes raw PCM data into an AudioBuffer.
+ * Specifically handles the 24kHz mono output of Gemini TTS.
+ */
 async function decodePCM(
   data: Uint8Array,
   ctx: AudioContext,
@@ -36,12 +40,13 @@ async function decodePCM(
   const dataInt16 = new Int16Array(bufferCopy);
   const frameCount = dataInt16.length / numChannels;
   
-  // Create a buffer at the data's native sample rate (Gemini TTS is 24kHz)
+  // Create buffer at source sample rate (24000 for Gemini TTS)
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
 
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
+      // Normalize 16-bit PCM to [-1.0, 1.0]
       const sample = dataInt16[i * numChannels + channel] / 32768.0;
       channelData[i] = Math.max(-1, Math.min(1, sample));
     }
@@ -70,57 +75,59 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       setCanNativeShare(navigator.canShare(shareData));
     }
     
-    // Media Session API: Tell iOS/Android this is high-quality media, not a phone call/moderator voice
+    // Unified High-Fidelity Metadata: Prevents iOS from defaulting to 'communication' mode
     if ('mediaSession' in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: result.params.occasion || 'Cinematic Greeting',
         artist: 'eGreetz Studio',
-        album: 'AI Cinematic Productions',
+        album: 'High-Fidelity AI Production',
       });
     }
   }, [shareUrl, result.params.occasion]);
 
-  // Unified Audio Asset Loading
+  // Unified Audio Asset Loading across all devices
   useEffect(() => {
     const initAudio = async () => {
       try {
-        // High-Quality Initialization: 
-        // 1. latencyHint: 'playback' avoids low-quality "communication" mode (moderator voice).
-        // 2. Omitting sampleRate allows the browser to use the device's native high-res rate.
+        // iOS/iPad FIX: Force 'playback' latencyHint. 
+        // This stops the OS from enabling echo cancellation or "moderator" filters 
+        // that reduce audio quality to phone-call levels.
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({
           latencyHint: 'playback'
         });
         
         audioContextRef.current = ctx;
 
-        // 1. Load Spokesperson Voice (Generated via Gemini)
+        // 1. Load Spokesperson Voice (Gemini TTS)
         const voiceSource = result.voiceUrl || result.audioUrl;
         if (voiceSource) {
           let buffer: AudioBuffer | null = null;
           if (voiceSource.startsWith('data:') || !voiceSource.startsWith('http')) {
             const cleanBase64 = voiceSource.replace(/^data:audio\/(wav|pcm);base64,/, '');
             const bytes = decodeBase64(cleanBase64);
-            // Gemini TTS returns 16-bit PCM mono at 24000Hz
+            // Gemini TTS output is ALWAYS 24000Hz mono PCM
             buffer = await decodePCM(bytes, ctx, 24000, 1);
           } else {
             const resp = await fetch(voiceSource);
             const arrayBuffer = await resp.arrayBuffer();
             try {
+              // Attempt standard decoding first
               buffer = await ctx.decodeAudioData(arrayBuffer);
             } catch {
+              // Fallback to PCM for raw storage bytes
               buffer = await decodePCM(new Uint8Array(arrayBuffer), ctx, 24000, 1);
             }
           }
           audioBufferRef.current = buffer;
         }
 
-        // 2. Load Cinematic Background Track
+        // 2. Load Cinematic Background Music
         const musicSource = result.backgroundMusicUrl || 'https://actions.google.com/static/audio/tracks/Epic_Cinematic_Saga.mp3';
         const musicResp = await fetch(musicSource);
         const musicArrayBuffer = await musicResp.arrayBuffer();
         musicBufferRef.current = await ctx.decodeAudioData(musicArrayBuffer);
       } catch (err) {
-        console.error("[Studio] Audio Initialization Error:", err);
+        console.error("[Studio] High-Fidelity Audio Init Error:", err);
       }
     };
 
@@ -133,7 +140,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     };
   }, [result.audioUrl, result.voiceUrl, result.backgroundMusicUrl]);
 
-  // Global Audio/Video Sync Controller
+  // Unified Synchronized Playback
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -154,18 +161,18 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       const ctx = audioContextRef.current;
       if (!ctx || ctx.state === 'closed') return;
       
-      // Crucial for iOS: resume context inside the play event handler
+      // Mandatory for iOS: resume context inside the event loop of a user gesture (play)
       if (ctx.state === 'suspended') {
         await ctx.resume();
       }
 
-      // Layer 1: Atmospheric Music
+      // Layer 1: Cinematic Ambience (Looped)
       if (musicBufferRef.current) {
         const mSrc = ctx.createBufferSource();
         mSrc.buffer = musicBufferRef.current;
         mSrc.loop = true;
         const mGain = ctx.createGain();
-        mGain.gain.value = 0.28; // Cinematic background volume
+        mGain.gain.value = 0.25; // Balanced for human voice clarity
         mGain.connect(ctx.destination);
         mSrc.connect(mGain);
         const mStart = Math.max(0, offset % musicBufferRef.current.duration);
@@ -173,15 +180,12 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
         musicNodeRef.current = mSrc;
       }
 
-      // Layer 2: Primary Voice-over (Human Quality)
+      // Layer 2: Master Spokesperson Voice (Synced with Video)
       if (audioBufferRef.current) {
         if (offset < audioBufferRef.current.duration) {
           const vSrc = ctx.createBufferSource();
           vSrc.buffer = audioBufferRef.current;
-          const vGain = ctx.createGain();
-          vGain.gain.value = 1.0;
-          vGain.connect(ctx.destination);
-          vSrc.connect(vGain);
+          vSrc.connect(ctx.destination);
           vSrc.start(0, offset);
           sourceNodeRef.current = vSrc;
         }
