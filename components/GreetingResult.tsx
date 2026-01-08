@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { GenerateGreetingParams, GreetingRecord } from '../types';
 import { RefreshCw, LayoutGrid, Share2, Copy, Check, Globe, Volume2, Share, Users, Type, Music } from 'lucide-react';
@@ -33,15 +32,20 @@ async function decodePCM(
   sampleRate: number,
   numChannels: number,
 ): Promise<AudioBuffer> {
+  // Ensure we have a clean view of the data
   const bufferCopy = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
   const dataInt16 = new Int16Array(bufferCopy);
   const frameCount = dataInt16.length / numChannels;
+  
+  // Create a buffer at the data's native sample rate
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
 
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
-      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+      // Direct conversion with clamping to avoid distortion
+      const sample = dataInt16[i * numChannels + channel] / 32768.0;
+      channelData[i] = Math.max(-1, Math.min(1, sample));
     }
   }
   return buffer;
@@ -73,7 +77,12 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
   useEffect(() => {
     const initAudio = async () => {
       try {
-        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        // iOS CRITICAL: Use 'playback' hint to avoid 'communication' (moderator) mode
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({
+          latencyHint: 'playback',
+          sampleRate: 48000 // Standard high-quality hardware rate
+        });
+        
         audioContextRef.current = ctx;
 
         // 1. Load Moderator Voice
@@ -83,6 +92,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
           if (voiceSource.startsWith('data:') || !voiceSource.startsWith('http')) {
             const cleanBase64 = voiceSource.replace(/^data:audio\/(wav|pcm);base64,/, '');
             const bytes = decodeBase64(cleanBase64);
+            // Gemini TTS returns PCM at 24000Hz
             buffer = await decodePCM(bytes, ctx, 24000, 1);
           } else {
             const resp = await fetch(voiceSource);
@@ -90,6 +100,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
             try {
               buffer = await ctx.decodeAudioData(arrayBuffer);
             } catch {
+              // Fallback for raw PCM stored in Firebase
               buffer = await decodePCM(new Uint8Array(arrayBuffer), ctx, 24000, 1);
             }
           }
@@ -109,7 +120,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     initAudio();
     return () => {
       if (audioContextRef.current) {
-        audioContextRef.current.close();
+        audioContextRef.current.close().catch(() => {});
         audioContextRef.current = null;
       }
     };
@@ -131,11 +142,15 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       }
     };
 
-    const playAudioNodes = (offset: number) => {
+    const playAudioNodes = async (offset: number) => {
       stopAudioNodes();
       const ctx = audioContextRef.current;
       if (!ctx || ctx.state === 'closed') return;
-      if (ctx.state === 'suspended') ctx.resume();
+      
+      // Ensure context is running (iOS required gesture)
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
 
       // Play Cinematic Music (Looping)
       if (musicBufferRef.current) {
@@ -143,7 +158,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
         mSrc.buffer = musicBufferRef.current;
         mSrc.loop = true;
         const mGain = ctx.createGain();
-        mGain.gain.value = 0.3; // High-quality cinematic mix
+        mGain.gain.value = 0.35; // Cinematic balance
         mGain.connect(ctx.destination);
         mSrc.connect(mGain);
         const mStart = Math.max(0, offset % musicBufferRef.current.duration);
@@ -151,7 +166,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
         musicNodeRef.current = mSrc;
       }
 
-      // Play Moderator (Strictly Sync'd)
+      // Play Voice-over (Sync'd)
       if (audioBufferRef.current) {
         if (offset < audioBufferRef.current.duration) {
           const vSrc = ctx.createBufferSource();
@@ -197,7 +212,6 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       </div>
 
       <div className="relative group rounded-3xl overflow-hidden shadow-2xl shadow-blue-500/20 mb-8 aspect-video bg-black ring-1 ring-white/10">
-        {/* FORCE MUTED on video element to kill the second voice. Moderator audio is handled by AudioContext. */}
         <video 
           ref={videoRef}
           src={result.url} 
@@ -205,11 +219,11 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
           autoPlay 
           loop 
           muted 
+          playsInline
           crossOrigin="anonymous"
           className="w-full h-full object-contain"
         />
 
-        {/* Cinematic Captioning Overlay */}
         {showCaptions && (
           <div className="absolute bottom-16 left-0 right-0 px-10 flex justify-center pointer-events-none">
             <div className="bg-black/60 backdrop-blur-xl px-10 py-5 rounded-3xl text-white text-center text-xl font-black border border-white/20 shadow-2xl max-w-[90%] leading-relaxed tracking-tight">
@@ -218,13 +232,12 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
           </div>
         )}
 
-        {/* Info & Toggles HUD */}
         <div className="absolute top-4 right-4 flex flex-col gap-2 items-end">
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md ${isCloudLink ? 'bg-blue-600/80' : 'bg-yellow-600/80'}`}>
             {isCloudLink ? <><Globe size={12} /> Cloud Master</> : <><Volume2 size={12} /> Local Production</>}
           </div>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md bg-green-600/80">
-            <Music size={12} /> Cinematic Audio Mix
+            <Music size={12} /> Studio Audio Mix
           </div>
           <button 
             onClick={() => setShowCaptions(!showCaptions)}
