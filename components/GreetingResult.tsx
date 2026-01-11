@@ -17,39 +17,26 @@ interface Props {
 }
 
 /**
- * Wraps raw PCM data into a standard WAV container.
- * This ensures the browser's native media stack treats it as High-Fidelity audio
- * rather than a communication stream (the cause of 'moderator voice' on iOS).
+ * Decodes raw PCM data (16-bit) into an AudioBuffer.
+ * This is the standard high-fidelity method that works consistently across platforms.
  */
-function wrapPcmInWav(pcmData: Uint8Array, sampleRate: number): ArrayBuffer {
-  const header = new ArrayBuffer(44);
-  const view = new DataView(header);
-  
-  const writeString = (offset: number, string: string) => {
-    for (let i = 0; i < string.length; i++) {
-      view.setUint8(offset + i, string.charCodeAt(i));
+async function decodeAudioData(
+  data: Uint8Array,
+  ctx: AudioContext,
+  sampleRate: number,
+  numChannels: number,
+): Promise<AudioBuffer> {
+  const dataInt16 = new Int16Array(data.buffer);
+  const frameCount = dataInt16.length / numChannels;
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+
+  for (let channel = 0; channel < numChannels; channel++) {
+    const channelData = buffer.getChannelData(channel);
+    for (let i = 0; i < frameCount; i++) {
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
     }
-  };
-
-  writeString(0, 'RIFF');
-  view.setUint32(4, 36 + pcmData.length, true);
-  writeString(8, 'WAVE');
-  writeString(12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true); // Linear PCM
-  view.setUint16(22, 1, true); // Mono
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true); // Byte rate
-  view.setUint16(32, 2, true); // Block align
-  view.setUint16(34, 16, true); // Bits per sample
-  writeString(36, 'data');
-  view.setUint32(40, pcmData.length, true);
-
-  const finalBuffer = new Uint8Array(header.byteLength + pcmData.byteLength);
-  finalBuffer.set(new Uint8Array(header), 0);
-  finalBuffer.set(pcmData, 44);
-  
-  return finalBuffer.buffer;
+  }
+  return buffer;
 }
 
 function decodeBase64(base64: string) {
@@ -83,76 +70,70 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       setCanNativeShare(navigator.canShare(shareData));
     }
     
-    // Explicitly set metadata to force High-Quality Media session profiling
     if ('mediaSession' in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: result.params.occasion || 'Cinematic Greeting',
-        artist: 'eGreetz Master Performance',
-        album: 'High-Fidelity AI Production',
+        artist: 'eGreetz AI Production',
+        album: 'High-Fidelity Greetings',
       });
     }
   }, [shareUrl, result.params.occasion]);
 
-  // High-Fidelity Audio Asset Loader
+  // Audio Loading and Decoding
   useEffect(() => {
     const initAudio = async () => {
       try {
-        // iOS/iPad FIX: Force 'playback' latencyHint. 
-        // This stops the OS from enabling low-quality "communication" mode (moderator voice).
+        // iOS FIX: latencyHint 'playback' ensures the high-quality hardware profile is used.
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({
           latencyHint: 'playback'
         });
-        
         audioContextRef.current = ctx;
 
-        // 1. Load Spokesperson Voice (Generated Human Performance)
+        // Load Narrator Voice
         const voiceSource = result.voiceUrl || result.audioUrl;
         if (voiceSource) {
-          let buffer: AudioBuffer | null = null;
           if (voiceSource.startsWith('data:') || !voiceSource.startsWith('http')) {
             const cleanBase64 = voiceSource.replace(/^data:audio\/(wav|pcm);base64,/, '');
             const bytes = decodeBase64(cleanBase64);
-            // Gemini TTS is 24000Hz mono. Wrapping in WAV triggers native high-res decoder.
-            const wavData = wrapPcmInWav(bytes, 24000);
-            buffer = await ctx.decodeAudioData(wavData);
+            // Gemini TTS returns 24kHz mono PCM 16-bit
+            audioBufferRef.current = await decodeAudioData(bytes, ctx, 24000, 1);
           } else {
             const resp = await fetch(voiceSource);
             const arrayBuffer = await resp.arrayBuffer();
+            // Try standard decode first, then fallback to manual PCM decode
             try {
-              buffer = await ctx.decodeAudioData(arrayBuffer);
+              audioBufferRef.current = await ctx.decodeAudioData(arrayBuffer);
             } catch {
-              const wavData = wrapPcmInWav(new Uint8Array(arrayBuffer), 24000);
-              buffer = await ctx.decodeAudioData(wavData);
+              audioBufferRef.current = await decodeAudioData(new Uint8Array(arrayBuffer), ctx, 24000, 1);
             }
           }
-          audioBufferRef.current = buffer;
         }
 
-        // 2. Load Cinematic Background Score
+        // Load Background Track
         const musicSource = result.backgroundMusicUrl || 'https://actions.google.com/static/audio/tracks/Epic_Cinematic_Saga.mp3';
         const musicResp = await fetch(musicSource);
         const musicArrayBuffer = await musicResp.arrayBuffer();
         musicBufferRef.current = await ctx.decodeAudioData(musicArrayBuffer);
       } catch (err) {
-        console.error("[Studio] Universal Audio Init Failure:", err);
+        console.error("[Studio] Audio Initialization Failure:", err);
       }
     };
 
     initAudio();
     return () => {
       if (audioContextRef.current) {
-        audioContextRef.current.close().catch(() => {});
+        audioContextRef.current.close();
         audioContextRef.current = null;
       }
     };
   }, [result.audioUrl, result.voiceUrl, result.backgroundMusicUrl]);
 
-  // Synchronized Master Playback Logic
+  // Sync Audio with Video Playback
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    const stopAudioNodes = () => {
+    const stopAudio = () => {
       if (sourceNodeRef.current) {
         try { sourceNodeRef.current.stop(); } catch (e) {}
         sourceNodeRef.current = null;
@@ -163,62 +144,49 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       }
     };
 
-    const playAudioNodes = async (offset: number) => {
-      stopAudioNodes();
+    const playAudio = async (offset: number) => {
+      stopAudio();
       const ctx = audioContextRef.current;
       if (!ctx || ctx.state === 'closed') return;
       
-      // Proactive context resumption for iOS reliability on user gesture
-      if (ctx.state === 'suspended') {
-        await ctx.resume();
-      }
+      if (ctx.state === 'suspended') await ctx.resume();
 
-      // Layer 1: Atmospheric Score (Looped)
+      // Background Music
       if (musicBufferRef.current) {
         const mSrc = ctx.createBufferSource();
         mSrc.buffer = musicBufferRef.current;
         mSrc.loop = true;
         const mGain = ctx.createGain();
-        mGain.gain.value = 0.28; // Standard cinematic balance
+        mGain.gain.value = 0.25;
         mGain.connect(ctx.destination);
         mSrc.connect(mGain);
-        const mStart = Math.max(0, offset % musicBufferRef.current.duration);
-        mSrc.start(0, mStart);
+        mSrc.start(0, offset % musicBufferRef.current.duration);
         musicNodeRef.current = mSrc;
       }
 
-      // Layer 2: Master Human Performance (Synced)
-      if (audioBufferRef.current) {
-        if (offset < audioBufferRef.current.duration) {
-          const vSrc = ctx.createBufferSource();
-          vSrc.buffer = audioBufferRef.current;
-          const vGain = ctx.createGain();
-          vGain.gain.value = 1.0; 
-          vGain.connect(ctx.destination);
-          vSrc.connect(vGain);
-          vSrc.start(0, offset);
-          sourceNodeRef.current = vSrc;
-        }
+      // Voice Narration
+      if (audioBufferRef.current && offset < audioBufferRef.current.duration) {
+        const vSrc = ctx.createBufferSource();
+        vSrc.buffer = audioBufferRef.current;
+        vSrc.connect(ctx.destination);
+        vSrc.start(0, offset);
+        sourceNodeRef.current = vSrc;
       }
     };
 
-    const handlePlay = () => playAudioNodes(video.currentTime);
-    const handlePause = () => stopAudioNodes();
-    const handleSeek = () => {
-      if (!video.paused) playAudioNodes(video.currentTime);
-    };
+    const onPlay = () => playAudio(video.currentTime);
+    const onPause = () => stopAudio();
+    const onSeek = () => { if (!video.paused) playAudio(video.currentTime); };
 
-    video.addEventListener('play', handlePlay);
-    video.addEventListener('pause', handlePause);
-    video.addEventListener('seeked', handleSeek);
-    video.addEventListener('waiting', handlePause);
+    video.addEventListener('play', onPlay);
+    video.addEventListener('pause', onPause);
+    video.addEventListener('seeked', onSeek);
 
     return () => {
-      video.removeEventListener('play', handlePlay);
-      video.removeEventListener('pause', handlePause);
-      video.removeEventListener('seeked', handleSeek);
-      video.removeEventListener('waiting', handlePause);
-      stopAudioNodes();
+      video.removeEventListener('play', onPlay);
+      video.removeEventListener('pause', onPause);
+      video.removeEventListener('seeked', onSeek);
+      stopAudio();
     };
   }, []);
 
@@ -259,9 +227,6 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
         <div className="absolute top-4 right-4 flex flex-col gap-2 items-end">
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md ${isCloudLink ? 'bg-blue-600/80' : 'bg-yellow-600/80'}`}>
             {isCloudLink ? <><Globe size={12} /> Cloud Master</> : <><Volume2 size={12} /> Local Production</>}
-          </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md bg-green-600/80">
-            <Music size={12} /> Studio Audio Mix
           </div>
           <button 
             onClick={() => setShowCaptions(!showCaptions)}
