@@ -33,7 +33,8 @@ export const generateGreetingVideo = async (
   
   const segmentLength = 7;
   const audioDuration = params.audioDuration || 7;
-  // Ensure video length is always significantly longer than audio to avoid cut-offs.
+  // Director's Rule: Ensure video length is always significantly longer than audio to avoid cut-offs.
+  // Using a 3.5s buffer to account for model performance variability.
   let targetDuration = Math.ceil(audioDuration) + 3.5; 
   
   if (params.extended) {
@@ -105,6 +106,7 @@ export const generateGreetingVideo = async (
     
     let currentProducedDuration = segmentLength;
     
+    // Director's Cut: Extension Loop to match audio duration
     while (currentProducedDuration < targetDuration) {
       const extensionPrompt = `
         Continue the cinematic shot with absolute continuity. The character remains in the frame.
@@ -174,7 +176,7 @@ export const generateGreetingVoice = async (params: GenerateGreetingParams): Pro
       STYLE: Your voice is rich, emotive, warm, and highly natural. 
       STRICT AVOIDANCE: Do NOT sound like a "Moderator", "Virtual Assistant", or "Robotic Text-to-Speech" engine. Your performance must be indistinguishable from a real human narrator.
       ENVIRONMENT: Imagine you are performing in a high-fidelity ${environment} setting.
-      MANDATORY REQUIREMENT: You MUST speak every single word of the provided script from start to finish. Do NOT truncate, summarize, or skip any part of the message. 
+      MANDATORY REQUIREMENT: You MUST dictate every single word of the provided script from start to finish. Do NOT truncate, summarize, or skip any part of the message. The narration must be complete.
     `.trim();
 
     const ttsPrompt = `
@@ -187,7 +189,7 @@ export const generateGreetingVoice = async (params: GenerateGreetingParams): Pro
       contents: [{ parts: [{ text: ttsPrompt }] }],
       config: {
         responseModalities: [Modality.AUDIO],
-        thinkingConfig: { thinkingBudget: 0 },
+        // Note: thinkingConfig is not supported for gemini-2.5-flash-preview-tts despite being 2.5 series.
         speechConfig: {
           voiceConfig: {
             prebuiltVoiceConfig: { voiceName: voiceMap[params.voice] },
@@ -211,6 +213,6 @@ export const generateGreetingVoice = async (params: GenerateGreetingParams): Pro
     return { base64: base64Audio, duration, blob };
   } catch (e) {
     console.error("Voice Generation failed:", e);
-    return null;
+    throw e; // Throw so App.tsx can catch and show error
   }
 };
