@@ -83,12 +83,12 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       setCanNativeShare(navigator.canShare(shareData));
     }
     
-    // Explicitly set metadata to help iOS identify this as Media, not a Call.
+    // Explicitly set metadata to force High-Quality Media session profiling
     if ('mediaSession' in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: result.params.occasion || 'Cinematic Greeting',
-        artist: 'eGreetz High-Fidelity Studio',
-        album: 'AI Professional Production',
+        artist: 'eGreetz Master Performance',
+        album: 'High-Fidelity AI Production',
       });
     }
   }, [shareUrl, result.params.occasion]);
@@ -97,22 +97,22 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
   useEffect(() => {
     const initAudio = async () => {
       try {
-        // iOS FIX: explicitly set latencyHint to 'playback'.
-        // This forces the OS to use high-quality hardware output instead of 'communication' output.
+        // iOS/iPad FIX: Force 'playback' latencyHint. 
+        // This stops the OS from enabling low-quality "communication" mode (moderator voice).
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({
           latencyHint: 'playback'
         });
         
         audioContextRef.current = ctx;
 
-        // 1. Load Human Performance Voice
+        // 1. Load Spokesperson Voice (Generated Human Performance)
         const voiceSource = result.voiceUrl || result.audioUrl;
         if (voiceSource) {
           let buffer: AudioBuffer | null = null;
           if (voiceSource.startsWith('data:') || !voiceSource.startsWith('http')) {
             const cleanBase64 = voiceSource.replace(/^data:audio\/(wav|pcm);base64,/, '');
             const bytes = decodeBase64(cleanBase64);
-            // Gemini TTS is 24000Hz mono. Wrapping in WAV triggers high-res decoding.
+            // Gemini TTS is 24000Hz mono. Wrapping in WAV triggers native high-res decoder.
             const wavData = wrapPcmInWav(bytes, 24000);
             buffer = await ctx.decodeAudioData(wavData);
           } else {
@@ -121,7 +121,6 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
             try {
               buffer = await ctx.decodeAudioData(arrayBuffer);
             } catch {
-              // Fallback to PCM-WAV wrapper if raw response
               const wavData = wrapPcmInWav(new Uint8Array(arrayBuffer), 24000);
               buffer = await ctx.decodeAudioData(wavData);
             }
@@ -129,13 +128,13 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
           audioBufferRef.current = buffer;
         }
 
-        // 2. Load Cinematic Atmospheric Track
+        // 2. Load Cinematic Background Score
         const musicSource = result.backgroundMusicUrl || 'https://actions.google.com/static/audio/tracks/Epic_Cinematic_Saga.mp3';
         const musicResp = await fetch(musicSource);
         const musicArrayBuffer = await musicResp.arrayBuffer();
         musicBufferRef.current = await ctx.decodeAudioData(musicArrayBuffer);
       } catch (err) {
-        console.error("[Studio] High-Fidelity Audio Init Failure:", err);
+        console.error("[Studio] Universal Audio Init Failure:", err);
       }
     };
 
@@ -148,7 +147,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     };
   }, [result.audioUrl, result.voiceUrl, result.backgroundMusicUrl]);
 
-  // Synchronized Cinematic Playback
+  // Synchronized Master Playback Logic
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -169,18 +168,18 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       const ctx = audioContextRef.current;
       if (!ctx || ctx.state === 'closed') return;
       
-      // Proactive resumption for iOS/Safari reliability
+      // Proactive context resumption for iOS reliability on user gesture
       if (ctx.state === 'suspended') {
         await ctx.resume();
       }
 
-      // Layer 1: Cinematic Ambience (Looped)
+      // Layer 1: Atmospheric Score (Looped)
       if (musicBufferRef.current) {
         const mSrc = ctx.createBufferSource();
         mSrc.buffer = musicBufferRef.current;
         mSrc.loop = true;
         const mGain = ctx.createGain();
-        mGain.gain.value = 0.28; // Balanced mix
+        mGain.gain.value = 0.28; // Standard cinematic balance
         mGain.connect(ctx.destination);
         mSrc.connect(mGain);
         const mStart = Math.max(0, offset % musicBufferRef.current.duration);
@@ -188,13 +187,13 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
         musicNodeRef.current = mSrc;
       }
 
-      // Layer 2: Master Human Voice (Pinned to Video Time)
+      // Layer 2: Master Human Performance (Synced)
       if (audioBufferRef.current) {
         if (offset < audioBufferRef.current.duration) {
           const vSrc = ctx.createBufferSource();
           vSrc.buffer = audioBufferRef.current;
           const vGain = ctx.createGain();
-          vGain.gain.value = 1.0; // Primary performance
+          vGain.gain.value = 1.0; 
           vGain.connect(ctx.destination);
           vSrc.connect(vGain);
           vSrc.start(0, offset);
