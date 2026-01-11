@@ -29,12 +29,12 @@ async function getAudioDuration(base64Data: string): Promise<number> {
 export const generateGreetingVideo = async (
   params: GenerateGreetingParams & { audioDuration?: number }
 ): Promise<{ objectUrl: string; blob: Blob }> => {
+  // Fresh instance to ensure current API Key
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const segmentLength = 7;
   const audioDuration = params.audioDuration || 7;
-  // Director's Rule: Ensure video length is always significantly longer than audio to avoid cut-offs.
-  // Using a 3.5s buffer to account for model performance variability.
+  // Buffer of 3.5s to ensure visual continuity beyond audio end
   let targetDuration = Math.ceil(audioDuration) + 3.5; 
   
   if (params.extended) {
@@ -44,6 +44,7 @@ export const generateGreetingVideo = async (
   const hasReferences = !!(params.userPhoto || params.scenePhoto);
   const needsExtension = targetDuration > segmentLength;
   
+  // Model selection based on requirements
   const modelToUse = (needsExtension || hasReferences) 
     ? 'veo-3.1-generate-preview' 
     : 'veo-3.1-fast-generate-preview';
@@ -51,16 +52,17 @@ export const generateGreetingVideo = async (
   const effectiveTheme = params.theme === GreetingTheme.NONE ? "" : params.theme;
   const environment = params.scenicDescription || effectiveTheme || "Cinematic Studio";
 
+  // Production instructions
   const baseCinematicInstruction = `
-    High-end ${params.occasion !== Occasion.NONE ? params.occasion : 'Cinematic Masterpiece'} production.
+    Cinematic production for ${params.occasion !== Occasion.NONE ? params.occasion : 'Special Occasion'}.
     Environment: ${environment}. 
-    Style: Professional 8k cinematography, realistic lighting, detailed textures.
+    Atmosphere: High-fidelity cinematography, detailed lighting.
     CRITICAL: THE VIDEO FILE MUST BE COMPLETELY SILENT. NO AUDIO TRACKS.
   `.trim();
 
   const lipSyncInstruction = params.userPhoto 
-    ? `CHARACTER FOCUS: The character in the reference image is speaking directly to the lens. LIP-SYNC: Their mouth and jaw movements MUST move in perfect synchronization with the spoken greeting: "${params.message}". Narrate the ENTIRE script.`
-    : `VISUAL SYNC: The environment and cinematic camera work should react dynamically to the rhythm and emotion of the spoken message: "${params.message}".`;
+    ? `CHARACTER PERFORMANCE: The person from the reference image is speaking directly to the camera. LIP-SYNC: Sync their mouth movement perfectly to this script: "${params.message}". Read the FULL script.`
+    : `VISUAL RESPONSE: The cinematic environment reacts to the spoken script: "${params.message}".`;
 
   const initialPayload: any = {
     model: modelToUse,
@@ -68,7 +70,7 @@ export const generateGreetingVideo = async (
     config: {
       numberOfVideos: 1,
       resolution: '720p',
-      aspectRatio: (modelToUse === 'veo-3.1-generate-preview' && hasReferences) ? '16:9' : params.aspectRatio,
+      aspectRatio: '16:9', // Veo 3.1 stable at 16:9
     },
   };
 
@@ -92,27 +94,31 @@ export const generateGreetingVideo = async (
   try {
     let operation = await ai.models.generateVideos(initialPayload);
     
+    // Polling Loop
     while (!operation.done) {
-      await new Promise((resolve) => setTimeout(resolve, 10000));
+      await new Promise((resolve) => setTimeout(resolve, 8000));
       operation = await ai.operations.getVideosOperation({ operation: operation });
       
       if (operation.error) {
-        throw new Error(`Production Failed: ${operation.error.message}`);
+        throw new Error(`Veo Production Failed: ${operation.error.message}`);
       }
     }
 
     let currentVideoAsset = operation.response?.generatedVideos?.[0]?.video;
-    if (!currentVideoAsset) throw new Error("Initial production failed.");
+    if (!currentVideoAsset) {
+      // Check for safety filter rejection
+      const isFiltered = operation.response?.generatedVideos === undefined || operation.response?.generatedVideos.length === 0;
+      throw new Error(isFiltered ? "Content blocked by safety filters. Try a different script." : "Initial production failed to return video asset.");
+    }
     
     let currentProducedDuration = segmentLength;
     
-    // Director's Cut: Extension Loop to match audio duration
+    // Extension Loop: Ensure visual continuity matches audio length
     while (currentProducedDuration < targetDuration) {
       const extensionPrompt = `
-        Continue the cinematic shot with absolute continuity. The character remains in the frame.
-        LIP-SYNC: Maintain the performance for the remaining script: "${params.message}".
-        Identical lighting and character structure.
-        CRITICAL: THE VIDEO MUST REMAIN SILENT.
+        Continue the cinematic shot seamlessly. The character is still in frame.
+        LIP-SYNC: Complete the narration of the script: "${params.message}".
+        Silent video file. Match visual style exactly.
       `.trim();
 
       const extensionPayload = {
@@ -122,15 +128,15 @@ export const generateGreetingVideo = async (
         config: {
           numberOfVideos: 1,
           resolution: '720p',
-          aspectRatio: initialPayload.config.aspectRatio,
+          aspectRatio: '16:9',
         }
       };
 
       let extendOp = await ai.models.generateVideos(extensionPayload);
       while (!extendOp.done) {
-        await new Promise((resolve) => setTimeout(resolve, 10000));
+        await new Promise((resolve) => setTimeout(resolve, 8000));
         extendOp = await ai.operations.getVideosOperation({ operation: extendOp });
-        if (extendOp.error) throw new Error(`Extension Failed: ${extendOp.error.message}`);
+        if (extendOp.error) throw new Error(`Video Extension Failed: ${extendOp.error.message}`);
       }
       
       const extendedAsset = extendOp.response?.generatedVideos?.[0]?.video;
@@ -145,14 +151,15 @@ export const generateGreetingVideo = async (
     const downloadLink = currentVideoAsset?.uri;
     if (downloadLink) {
       const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+      if (!response.ok) throw new Error("Failed to download video from production server.");
       const blob = await response.blob();
       return { objectUrl: URL.createObjectURL(blob), blob };
     }
   } catch (error: any) {
-    console.error("[Studio] Video Production Failure:", error);
+    console.error("[Studio] Production Pipeline Error:", error);
     throw error;
   }
-  throw new Error('Production pipeline failed.');
+  throw new Error('Critical failure in production pipeline.');
 };
 
 /**
@@ -172,16 +179,16 @@ export const generateGreetingVoice = async (params: GenerateGreetingParams): Pro
     const environment = params.scenicDescription || effectiveTheme || "Cinematic Studio";
     
     const voicePersona = `
-      PERFORMANCE PERSONA: You are a professional, world-class Human Actor and Cinematic Storyteller. 
-      STYLE: Your voice is rich, emotive, warm, and highly natural. 
-      STRICT AVOIDANCE: Do NOT sound like a "Moderator", "Virtual Assistant", or "Robotic Text-to-Speech" engine. Your performance must be indistinguishable from a real human narrator.
-      ENVIRONMENT: Imagine you are performing in a high-fidelity ${environment} setting.
-      MANDATORY REQUIREMENT: You MUST dictate every single word of the provided script from start to finish. Do NOT truncate, summarize, or skip any part of the message. The narration must be complete.
+      NARRATOR COMMAND: You are a professional, world-class Human Cinematic Actor. 
+      PERFORMANCE: Your voice is expressive, warm, and deeply human. 
+      STRICT PROHIBITION: DO NOT use any "Moderator", "Assistant", "Virtual Assistant", or "Robotic" tones. 
+      CONTEXT: You are recording in a high-fidelity studio for a cinematic ${environment} project.
+      MANDATORY: Dictate EVERY WORD of the provided script clearly. Do NOT shorten. Do NOT skip. 
     `.trim();
 
     const ttsPrompt = `
       ${voicePersona}
-      ACTUAL SCRIPT TO NARRATE: "${params.message}"
+      SCRIPT: "${params.message}"
     `.trim();
 
     const response = await ai.models.generateContent({
@@ -189,7 +196,6 @@ export const generateGreetingVoice = async (params: GenerateGreetingParams): Pro
       contents: [{ parts: [{ text: ttsPrompt }] }],
       config: {
         responseModalities: [Modality.AUDIO],
-        // Note: thinkingConfig is not supported for gemini-2.5-flash-preview-tts despite being 2.5 series.
         speechConfig: {
           voiceConfig: {
             prebuiltVoiceConfig: { voiceName: voiceMap[params.voice] },
@@ -212,7 +218,7 @@ export const generateGreetingVoice = async (params: GenerateGreetingParams): Pro
 
     return { base64: base64Audio, duration, blob };
   } catch (e) {
-    console.error("Voice Generation failed:", e);
-    throw e; // Throw so App.tsx can catch and show error
+    console.error("[Studio] TTS Generation Error:", e);
+    throw e;
   }
 };
