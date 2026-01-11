@@ -33,8 +33,7 @@ export const generateGreetingVideo = async (
   
   const segmentLength = 7;
   const audioDuration = params.audioDuration || 7;
-  // Director's Rule: Ensure video length is always significantly longer than audio to avoid cut-offs.
-  // Using a 3.5s buffer to account for model performance variability.
+  // Ensure video length is always significantly longer than audio to avoid cut-offs.
   let targetDuration = Math.ceil(audioDuration) + 3.5; 
   
   if (params.extended) {
@@ -106,7 +105,6 @@ export const generateGreetingVideo = async (
     
     let currentProducedDuration = segmentLength;
     
-    // Director's Cut: Extension Loop to match audio duration
     while (currentProducedDuration < targetDuration) {
       const extensionPrompt = `
         Continue the cinematic shot with absolute continuity. The character remains in the frame.
@@ -171,17 +169,17 @@ export const generateGreetingVoice = async (params: GenerateGreetingParams): Pro
     const effectiveTheme = params.theme === GreetingTheme.NONE ? "" : params.theme;
     const environment = params.scenicDescription || effectiveTheme || "Cinematic Studio";
     
-    // MANDATORY: Explicit instruction to speak EVERY word of the script to avoid truncation on any platform.
     const voicePersona = `
-      NARRATOR PERSONA: Professional, high-end cinematic storyteller. Voice is rich, human-like, resonant, and natural.
-      TONE: Prestigious and human. Strictly AVOID robotic, moderator, or "virtual assistant" styles.
-      ENVIRONMENT: Resonating in a high-quality ${environment} acoustic space.
-      MANDATORY INSTRUCTION: You MUST dictate the ENTIRE script provided below. Do NOT shorten it. Every single word of the provided message must be spoken clearly and cinematically.
+      PERFORMANCE PERSONA: You are a professional, world-class Human Actor and Cinematic Storyteller. 
+      STYLE: Your voice is rich, emotive, warm, and highly natural. 
+      STRICT AVOIDANCE: Do NOT sound like a "Moderator", "Virtual Assistant", or "Robotic Text-to-Speech" engine. Your performance must be indistinguishable from a real human narrator.
+      ENVIRONMENT: Imagine you are performing in a high-fidelity ${environment} setting.
+      MANDATORY REQUIREMENT: You MUST speak every single word of the provided script from start to finish. Do NOT truncate, summarize, or skip any part of the message. 
     `.trim();
 
     const ttsPrompt = `
       ${voicePersona}
-      SCRIPT TO DICTATE IN FULL: "${params.message}"
+      ACTUAL SCRIPT TO NARRATE: "${params.message}"
     `.trim();
 
     const response = await ai.models.generateContent({

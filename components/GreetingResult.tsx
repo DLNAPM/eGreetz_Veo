@@ -16,6 +16,41 @@ interface Props {
   onInternalShare?: (email: string) => void;
 }
 
+/**
+ * Wraps raw PCM data into a standard WAV container so the browser's native
+ * decodeAudioData handles it with high-fidelity instead of manual PCM mapping.
+ */
+function wrapPcmInWav(pcmData: Uint8Array, sampleRate: number): ArrayBuffer {
+  const header = new ArrayBuffer(44);
+  const view = new DataView(header);
+  
+  const writeString = (offset: number, string: string) => {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  };
+
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + pcmData.length, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM format
+  view.setUint16(22, 1, true); // Mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true); // Byte rate
+  view.setUint16(32, 2, true); // Block align
+  view.setUint16(34, 16, true); // Bits per sample
+  writeString(36, 'data');
+  view.setUint32(40, pcmData.length, true);
+
+  const finalBuffer = new Uint8Array(header.byteLength + pcmData.byteLength);
+  finalBuffer.set(new Uint8Array(header), 0);
+  finalBuffer.set(pcmData, 44);
+  
+  return finalBuffer.buffer;
+}
+
 function decodeBase64(base64: string) {
   const binaryString = atob(base64);
   const len = binaryString.length;
@@ -24,34 +59,6 @@ function decodeBase64(base64: string) {
     bytes[i] = binaryString.charCodeAt(i);
   }
   return bytes;
-}
-
-/**
- * Decodes raw PCM data into an AudioBuffer.
- * Specifically handles the 24kHz mono output of Gemini TTS.
- */
-async function decodePCM(
-  data: Uint8Array,
-  ctx: AudioContext,
-  sampleRate: number,
-  numChannels: number,
-): Promise<AudioBuffer> {
-  const bufferCopy = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
-  const dataInt16 = new Int16Array(bufferCopy);
-  const frameCount = dataInt16.length / numChannels;
-  
-  // Create buffer at source sample rate (24000 for Gemini TTS)
-  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-
-  for (let channel = 0; channel < numChannels; channel++) {
-    const channelData = buffer.getChannelData(channel);
-    for (let i = 0; i < frameCount; i++) {
-      // Normalize 16-bit PCM to [-1.0, 1.0]
-      const sample = dataInt16[i * numChannels + channel] / 32768.0;
-      channelData[i] = Math.max(-1, Math.min(1, sample));
-    }
-  }
-  return buffer;
 }
 
 const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInternalShare }) => {
@@ -75,59 +82,59 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       setCanNativeShare(navigator.canShare(shareData));
     }
     
-    // Unified High-Fidelity Metadata: Prevents iOS from defaulting to 'communication' mode
+    // Tell OS this is Media Playback, not a call, to prevent "moderator voice" profile on iOS
     if ('mediaSession' in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: result.params.occasion || 'Cinematic Greeting',
-        artist: 'eGreetz Studio',
-        album: 'High-Fidelity AI Production',
+        artist: 'eGreetz Master Production',
+        album: 'AI Cinematic Studio',
       });
     }
   }, [shareUrl, result.params.occasion]);
 
-  // Unified Audio Asset Loading across all devices
+  // Unified High-Fidelity Audio Loading
   useEffect(() => {
     const initAudio = async () => {
       try {
-        // iOS/iPad FIX: Force 'playback' latencyHint. 
-        // This stops the OS from enabling echo cancellation or "moderator" filters 
-        // that reduce audio quality to phone-call levels.
+        // iOS FIX: explicitly set latencyHint to 'playback' and DO NOT set a fixed sample rate here
+        // if we want to ensure the browser picks the best hardware rate.
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({
           latencyHint: 'playback'
         });
         
         audioContextRef.current = ctx;
 
-        // 1. Load Spokesperson Voice (Gemini TTS)
+        // 1. Load Spokesperson Voice
         const voiceSource = result.voiceUrl || result.audioUrl;
         if (voiceSource) {
           let buffer: AudioBuffer | null = null;
           if (voiceSource.startsWith('data:') || !voiceSource.startsWith('http')) {
             const cleanBase64 = voiceSource.replace(/^data:audio\/(wav|pcm);base64,/, '');
             const bytes = decodeBase64(cleanBase64);
-            // Gemini TTS output is ALWAYS 24000Hz mono PCM
-            buffer = await decodePCM(bytes, ctx, 24000, 1);
+            // Gemini TTS is 24000Hz mono PCM. We wrap it in WAV to trigger high-fidelity browser decoding.
+            const wavData = wrapPcmInWav(bytes, 24000);
+            buffer = await ctx.decodeAudioData(wavData);
           } else {
             const resp = await fetch(voiceSource);
             const arrayBuffer = await resp.arrayBuffer();
             try {
-              // Attempt standard decoding first
               buffer = await ctx.decodeAudioData(arrayBuffer);
             } catch {
-              // Fallback to PCM for raw storage bytes
-              buffer = await decodePCM(new Uint8Array(arrayBuffer), ctx, 24000, 1);
+              // Fallback: assume raw PCM if decoding fails
+              const wavData = wrapPcmInWav(new Uint8Array(arrayBuffer), 24000);
+              buffer = await ctx.decodeAudioData(wavData);
             }
           }
           audioBufferRef.current = buffer;
         }
 
-        // 2. Load Cinematic Background Music
+        // 2. Load Cinematic Background Track
         const musicSource = result.backgroundMusicUrl || 'https://actions.google.com/static/audio/tracks/Epic_Cinematic_Saga.mp3';
         const musicResp = await fetch(musicSource);
         const musicArrayBuffer = await musicResp.arrayBuffer();
         musicBufferRef.current = await ctx.decodeAudioData(musicArrayBuffer);
       } catch (err) {
-        console.error("[Studio] High-Fidelity Audio Init Error:", err);
+        console.error("[Studio] Audio Initialization Failure:", err);
       }
     };
 
@@ -140,7 +147,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     };
   }, [result.audioUrl, result.voiceUrl, result.backgroundMusicUrl]);
 
-  // Unified Synchronized Playback
+  // Audio/Video Synchronizer
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -161,18 +168,18 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       const ctx = audioContextRef.current;
       if (!ctx || ctx.state === 'closed') return;
       
-      // Mandatory for iOS: resume context inside the event loop of a user gesture (play)
+      // Critical for iOS: resume on every play attempt to ensure we stay out of suspended modes
       if (ctx.state === 'suspended') {
         await ctx.resume();
       }
 
-      // Layer 1: Cinematic Ambience (Looped)
+      // Layer 1: Ambient Cinema Track (Looped)
       if (musicBufferRef.current) {
         const mSrc = ctx.createBufferSource();
         mSrc.buffer = musicBufferRef.current;
         mSrc.loop = true;
         const mGain = ctx.createGain();
-        mGain.gain.value = 0.25; // Balanced for human voice clarity
+        mGain.gain.value = 0.3; // Low profile balance
         mGain.connect(ctx.destination);
         mSrc.connect(mGain);
         const mStart = Math.max(0, offset % musicBufferRef.current.duration);
@@ -180,7 +187,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
         musicNodeRef.current = mSrc;
       }
 
-      // Layer 2: Master Spokesperson Voice (Synced with Video)
+      // Layer 2: Master Human Voice (Synchronized)
       if (audioBufferRef.current) {
         if (offset < audioBufferRef.current.duration) {
           const vSrc = ctx.createBufferSource();
