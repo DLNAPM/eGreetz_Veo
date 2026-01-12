@@ -41,102 +41,131 @@ export const generateGreetingVideo = async (
   }
 
   const hasReferences = !!(params.userPhoto || params.scenePhoto);
-  const modelToUse = (targetDuration > segmentLength || hasReferences) 
-    ? 'veo-3.1-generate-preview' 
-    : 'veo-3.1-fast-generate-preview';
+  
+  // Logic to handle retries and model escalation
+  const runGeneration = async (modelOverride?: VeoModel) => {
+    const modelToUse = modelOverride || ((targetDuration > segmentLength || hasReferences) 
+      ? 'veo-3.1-generate-preview' 
+      : 'veo-3.1-fast-generate-preview');
 
-  const effectiveTheme = params.theme === GreetingTheme.NONE ? "" : params.theme;
-  const environment = params.scenicDescription || effectiveTheme || "Cinematic Studio";
+    const effectiveTheme = params.theme === GreetingTheme.NONE ? "" : params.theme;
+    const environment = params.scenicDescription || effectiveTheme || "Cinematic Studio";
 
-  const prompt = `
-    A cinematic greeting for ${params.occasion !== Occasion.NONE ? params.occasion : 'a special occasion'}.
-    Environment: ${environment}. 
-    Style: High-end production, professional lighting, 8k resolution.
-    Performance: The character is speaking the following message directly to the camera: "${params.message}". 
-    Synchronize lip movements to the spoken words.
-    CRITICAL: THE VIDEO MUST BE COMPLETELY SILENT.
-  `.trim();
+    const prompt = `
+      CINEMATIC PRODUCTION: A high-quality visual greeting for ${params.occasion !== Occasion.NONE ? params.occasion : 'a special event'}.
+      SCENE: ${environment}. 
+      VISUAL STYLE: Cinematic lighting, professional 8k photography, realistic textures.
+      PERFORMANCE: A character is center-frame, looking at the camera and clearly speaking the following message: "${params.message}". 
+      LIP-SYNC: Synchronize mouth movements to the spoken words of the script.
+      TECHNICAL: The output video file should be silent.
+    `.trim();
 
-  const initialPayload: any = {
-    model: modelToUse,
-    prompt: prompt,
-    config: {
-      numberOfVideos: 1,
-      resolution: '720p',
-      aspectRatio: '16:9',
-    },
-  };
+    const payload: any = {
+      model: modelToUse,
+      prompt: prompt,
+      config: {
+        numberOfVideos: 1,
+        resolution: '720p',
+        aspectRatio: '16:9',
+      },
+    };
 
-  const referenceImages: any[] = [];
-  if (params.userPhoto) {
-    referenceImages.push({
-      image: { imageBytes: params.userPhoto.base64, mimeType: params.userPhoto.file.type || 'image/jpeg' },
-      referenceType: VideoGenerationReferenceType.ASSET,
-    });
-  }
-  if (params.scenePhoto) {
-    referenceImages.push({
-      image: { imageBytes: params.scenePhoto.base64, mimeType: params.scenePhoto.file.type || 'image/jpeg' },
-      referenceType: VideoGenerationReferenceType.ASSET,
-    });
-  }
-  if (referenceImages.length > 0) {
-    initialPayload.config.referenceImages = referenceImages;
-  }
+    const referenceImages: any[] = [];
+    if (params.userPhoto) {
+      referenceImages.push({
+        image: { imageBytes: params.userPhoto.base64, mimeType: params.userPhoto.file.type || 'image/jpeg' },
+        referenceType: VideoGenerationReferenceType.ASSET,
+      });
+    }
+    if (params.scenePhoto) {
+      referenceImages.push({
+        image: { imageBytes: params.scenePhoto.base64, mimeType: params.scenePhoto.file.type || 'image/jpeg' },
+        referenceType: VideoGenerationReferenceType.ASSET,
+      });
+    }
+    if (referenceImages.length > 0) {
+      payload.config.referenceImages = referenceImages;
+    }
 
-  try {
-    let operation = await ai.models.generateVideos(initialPayload);
+    let operation = await ai.models.generateVideos(payload);
     
     while (!operation.done) {
       await new Promise((resolve) => setTimeout(resolve, 10000));
       operation = await ai.operations.getVideosOperation({ operation: operation });
-      if (operation.error) throw new Error(operation.error.message);
+      if (operation.error) {
+        console.warn(`[Gemini] Operation reported error: ${operation.error.message}`);
+        throw new Error(operation.error.message);
+      }
     }
 
-    let currentVideoAsset = operation.response?.generatedVideos?.[0]?.video;
-    if (!currentVideoAsset) throw new Error("Video generation failed.");
+    const videoAsset = operation.response?.generatedVideos?.[0]?.video;
+    if (!videoAsset) {
+      console.warn("[Gemini] Operation completed but returned no video asset. This might be a safety filter trigger.");
+      throw new Error("EMPTY_RESULT");
+    }
+
+    return videoAsset;
+  };
+
+  try {
+    let currentVideoAsset;
+    try {
+      // Attempt 1: Standard logic
+      currentVideoAsset = await runGeneration();
+    } catch (e: any) {
+      console.warn("[Gemini] First production attempt failed, retrying with stable model...");
+      // Attempt 2: Escalate to standard (non-fast) model for better stability
+      currentVideoAsset = await runGeneration(VeoModel.VEO);
+    }
     
     let currentProducedDuration = segmentLength;
     
+    // Extension loop for longer scripts
     while (currentProducedDuration < targetDuration) {
-      const extensionPayload = {
-        model: 'veo-3.1-generate-preview',
-        prompt: `Continue the scene seamlessly as the character completes the message: "${params.message}". Silent video.`,
-        video: currentVideoAsset,
-        config: {
-          numberOfVideos: 1,
-          resolution: '720p',
-          aspectRatio: '16:9',
-        }
-      };
+      try {
+        const extensionPayload = {
+          model: 'veo-3.1-generate-preview',
+          prompt: `Continue the cinematic scene with perfect visual continuity. The character finishes saying: "${params.message}". Keep the video silent.`,
+          video: currentVideoAsset,
+          config: {
+            numberOfVideos: 1,
+            resolution: '720p',
+            aspectRatio: '16:9',
+          }
+        };
 
-      let extendOp = await ai.models.generateVideos(extensionPayload);
-      while (!extendOp.done) {
-        await new Promise((resolve) => setTimeout(resolve, 10000));
-        extendOp = await ai.operations.getVideosOperation({ operation: extendOp });
-        if (extendOp.error) break; 
-      }
-      
-      const extendedAsset = extendOp.response?.generatedVideos?.[0]?.video;
-      if (extendedAsset) {
-        currentVideoAsset = extendedAsset;
-        currentProducedDuration += segmentLength;
-      } else {
-        break; 
+        let extendOp = await ai.models.generateVideos(extensionPayload);
+        while (!extendOp.done) {
+          await new Promise((resolve) => setTimeout(resolve, 10000));
+          extendOp = await ai.operations.getVideosOperation({ operation: extendOp });
+          if (extendOp.error) break; 
+        }
+        
+        const extendedAsset = extendOp.response?.generatedVideos?.[0]?.video;
+        if (extendedAsset) {
+          currentVideoAsset = extendedAsset;
+          currentProducedDuration += segmentLength;
+        } else {
+          break; 
+        }
+      } catch (extError) {
+        console.warn("[Gemini] Extension failed, returning video generated so far.");
+        break;
       }
     }
 
     const downloadLink = currentVideoAsset?.uri;
     if (downloadLink) {
       const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+      if (!response.ok) throw new Error("Failed to download video asset.");
       const blob = await response.blob();
       return { objectUrl: URL.createObjectURL(blob), blob };
     }
   } catch (error: any) {
-    console.error("[Gemini] Production Failure:", error);
-    throw error;
+    console.error("[Gemini] Production Pipeline Failure:", error);
+    throw new Error(error.message === "EMPTY_RESULT" ? "The model was unable to generate a video for this prompt. Try simplifying your message or description." : error.message);
   }
-  throw new Error('Video production pipeline failed.');
+  throw new Error('Video production pipeline reached an unexpected end.');
 };
 
 /**
