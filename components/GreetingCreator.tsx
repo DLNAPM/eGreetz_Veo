@@ -1,7 +1,6 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Occasion, GreetingTheme, VoiceGender, GenerateGreetingParams, ImageFile, AudioFile, VeoModel, AspectRatio, GreetingRecord } from '../types';
-import { Mic, Upload, X, Sparkles, Wand2, ChevronLeft, Clock, Zap, HelpCircle, ChevronDown, Calendar, Wind, PenTool, Music, Image as ImageIcon } from 'lucide-react';
+import { Mic, Upload, X, Sparkles, ChevronLeft, Clock, Zap, HelpCircle, ChevronDown, Calendar, Wind, PenTool, Music, Image as ImageIcon, Volume2 } from 'lucide-react';
 import HelpModal from './HelpModal';
 
 interface Props {
@@ -46,8 +45,8 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
       setOccasion(initialData.occasion);
       setMessage(initialData.message);
       setTheme(initialData.theme);
-      if (initialData.scenicDescription) setScenicDescription(initialData.scenicDescription);
       if (initialData.voice) setVoice(initialData.voice);
+      if (initialData.scenicDescription) setScenicDescription(initialData.scenicDescription);
     }
   }, [initialData]);
 
@@ -183,6 +182,31 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
           </div>
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="relative group md:col-span-2">
+            <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Voice Modulation (Optional Narration)</label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-blue-500">
+                <Volume2 size={18} />
+              </div>
+              <select
+                value={voice}
+                onChange={(e) => setVoice(e.target.value as VoiceGender)}
+                className="w-full bg-[#0a0a0c] border border-white/10 rounded-2xl pl-12 pr-10 py-4 text-white font-bold appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-600 hover:bg-white/5 transition-all"
+              >
+                {Object.values(VoiceGender).map(v => (
+                  <option key={v} value={v} className="bg-[#0a0a0c] text-white py-2">
+                    {v}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-gray-500">
+                <ChevronDown size={18} />
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div>
           <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Scenic Description & Visual Reference</label>
           <div className="flex flex-col md:flex-row gap-4">
@@ -226,14 +250,14 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
 
         <div>
           <div className="flex justify-between items-center mb-3">
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-[0.2em]">Greeting Script</label>
+            <label className="text-xs font-bold text-gray-500 uppercase tracking-[0.2em]">Greeting Script (Subtitles)</label>
             <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest">{message.length} / 1000</span>
           </div>
           <div className="relative">
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="What would you like the video to say? AI will synchronize the speech for you..."
+              placeholder="Type your message here. It will be displayed as cinematic subtitles..."
               className="w-full h-32 bg-[#0a0a0c] border border-white/5 rounded-3xl p-6 text-white text-lg placeholder-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all resize-none shadow-inner"
               maxLength={1000}
             />
@@ -249,7 +273,7 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="relative group">
-            <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Character Reference (Optional)</label>
+            <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Style Reference (Optional)</label>
             {photo ? (
               <div className="relative w-full h-24 rounded-2xl overflow-hidden border border-white/10 bg-[#0a0a0c]">
                 <img src={URL.createObjectURL(photo.file)} alt="Preview" className="w-full h-full object-cover opacity-60" />
@@ -269,7 +293,7 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
                 className="w-full h-24 bg-[#0a0a0c] border-2 border-dashed border-white/5 rounded-2xl flex flex-col items-center justify-center gap-2 text-gray-500 hover:text-blue-400 hover:bg-[#121214] transition-all"
               >
                 <Upload size={20} className="opacity-30" />
-                <span className="font-bold text-[10px] uppercase tracking-widest">Character Photo</span>
+                <span className="font-bold text-[10px] uppercase tracking-widest">Atmosphere Photo</span>
               </button>
             )}
             <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} />
@@ -309,31 +333,15 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-           <div className="relative group">
-            <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Voice Modulation</label>
-            <div className="relative">
-              <select 
-                value={voice}
-                onChange={(e) => setVoice(e.target.value as VoiceGender)}
-                className="w-full bg-[#0a0a0c] border border-white/10 rounded-2xl px-5 py-4 text-white font-bold appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-600 hover:bg-white/5 transition-all"
-              >
-                {Object.values(VoiceGender).map(v => <option key={v} value={v} className="bg-[#0a0a0c] text-white">{v}</option>)}
-              </select>
-              <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none text-gray-500">
-                <ChevronDown size={18} />
-              </div>
-            </div>
-          </div>
-
-          <div className="p-4 bg-[#0a0a0c] border border-white/5 rounded-2xl flex items-center justify-between">
+        <div className="flex justify-center">
+          <div className="p-6 bg-[#0a0a0c] border border-white/5 rounded-3xl flex items-center justify-between w-full max-w-md">
             <div className="flex items-center gap-3">
               <div className={`p-2 rounded-lg ${extended ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-500'}`}>
                 <Clock size={18} />
               </div>
               <div>
                 <p className="font-black text-white uppercase tracking-widest text-[10px]">Director's Cut</p>
-                <p className="text-gray-500 text-[10px]">15s+ Production & Auto-Sync</p>
+                <p className="text-gray-500 text-[10px]">14s+ Extended Production</p>
               </div>
             </div>
             <button 
@@ -352,7 +360,7 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
               message, 
               theme, 
               scenicDescription,
-              voice, 
+              voice: voice,
               userPhoto: photo, 
               scenePhoto,
               backgroundMusic: audioFile,

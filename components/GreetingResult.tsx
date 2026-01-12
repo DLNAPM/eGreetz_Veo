@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GenerateGreetingParams, GreetingRecord } from '../types';
-import { RefreshCw, LayoutGrid, Share2, Copy, Check, Globe, Volume2, Share, Users, Type, Music } from 'lucide-react';
+import { RefreshCw, LayoutGrid, Globe, Volume2, Share, Users, Type, VolumeX, Mic, Check, Volume1 } from 'lucide-react';
 
 interface Props {
   result: { 
@@ -18,7 +18,6 @@ interface Props {
 
 /**
  * Decodes raw PCM data (16-bit) into an AudioBuffer.
- * This is the standard high-fidelity method that works consistently across platforms.
  */
 async function decodeAudioData(
   data: Uint8Array,
@@ -53,13 +52,14 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
   const [copied, setCopied] = useState(false);
   const [canNativeShare, setCanNativeShare] = useState(false);
   const [showCaptions, setShowCaptions] = useState(true);
+  const [voiceMuted, setVoiceMuted] = useState(true); // Narrator voice (Moderator) muted by default
   const videoRef = useRef<HTMLVideoElement>(null);
   
   const audioContextRef = useRef<AudioContext | null>(null);
-  const audioBufferRef = useRef<AudioBuffer | null>(null);
   const musicBufferRef = useRef<AudioBuffer | null>(null);
-  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
+  const voiceBufferRef = useRef<AudioBuffer | null>(null);
   const musicNodeRef = useRef<AudioBufferSourceNode | null>(null);
+  const voiceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   
   const shareUrl = result.url;
   const isCloudLink = shareUrl.startsWith('http');
@@ -79,32 +79,29 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     }
   }, [shareUrl, result.params.occasion]);
 
-  // Audio Loading and Decoding
+  // Audio Asset Loading
   useEffect(() => {
     const initAudio = async () => {
       try {
-        // iOS FIX: latencyHint 'playback' ensures the high-quality hardware profile is used.
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({
           latencyHint: 'playback'
         });
         audioContextRef.current = ctx;
 
-        // Load Narrator Voice
+        // Load Narrator Voice if present
         const voiceSource = result.voiceUrl || result.audioUrl;
         if (voiceSource) {
           if (voiceSource.startsWith('data:') || !voiceSource.startsWith('http')) {
             const cleanBase64 = voiceSource.replace(/^data:audio\/(wav|pcm);base64,/, '');
             const bytes = decodeBase64(cleanBase64);
-            // Gemini TTS returns 24kHz mono PCM 16-bit
-            audioBufferRef.current = await decodeAudioData(bytes, ctx, 24000, 1);
+            voiceBufferRef.current = await decodeAudioData(bytes, ctx, 24000, 1);
           } else {
             const resp = await fetch(voiceSource);
             const arrayBuffer = await resp.arrayBuffer();
-            // Try standard decode first, then fallback to manual PCM decode
             try {
-              audioBufferRef.current = await ctx.decodeAudioData(arrayBuffer);
+              voiceBufferRef.current = await ctx.decodeAudioData(arrayBuffer);
             } catch {
-              audioBufferRef.current = await decodeAudioData(new Uint8Array(arrayBuffer), ctx, 24000, 1);
+              voiceBufferRef.current = await decodeAudioData(new Uint8Array(arrayBuffer), ctx, 24000, 1);
             }
           }
         }
@@ -126,7 +123,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
         audioContextRef.current = null;
       }
     };
-  }, [result.audioUrl, result.voiceUrl, result.backgroundMusicUrl]);
+  }, [result.backgroundMusicUrl, result.voiceUrl, result.audioUrl]);
 
   // Sync Audio with Video Playback
   useEffect(() => {
@@ -134,13 +131,13 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     if (!video) return;
 
     const stopAudio = () => {
-      if (sourceNodeRef.current) {
-        try { sourceNodeRef.current.stop(); } catch (e) {}
-        sourceNodeRef.current = null;
-      }
       if (musicNodeRef.current) {
         try { musicNodeRef.current.stop(); } catch (e) {}
         musicNodeRef.current = null;
+      }
+      if (voiceNodeRef.current) {
+        try { voiceNodeRef.current.stop(); } catch (e) {}
+        voiceNodeRef.current = null;
       }
     };
 
@@ -151,7 +148,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       
       if (ctx.state === 'suspended') await ctx.resume();
 
-      // Background Music
+      // Background Music (Always unmuted by default)
       if (musicBufferRef.current) {
         const mSrc = ctx.createBufferSource();
         mSrc.buffer = musicBufferRef.current;
@@ -164,13 +161,13 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
         musicNodeRef.current = mSrc;
       }
 
-      // Voice Narration
-      if (audioBufferRef.current && offset < audioBufferRef.current.duration) {
+      // Voice Narration (Toggleable, starts muted by default)
+      if (voiceBufferRef.current && !voiceMuted && offset < voiceBufferRef.current.duration) {
         const vSrc = ctx.createBufferSource();
-        vSrc.buffer = audioBufferRef.current;
+        vSrc.buffer = voiceBufferRef.current;
         vSrc.connect(ctx.destination);
         vSrc.start(0, offset);
-        sourceNodeRef.current = vSrc;
+        voiceNodeRef.current = vSrc;
       }
     };
 
@@ -188,12 +185,16 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       video.removeEventListener('seeked', onSeek);
       stopAudio();
     };
-  }, []);
+  }, [voiceMuted]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(shareUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const toggleVoice = () => {
+    setVoiceMuted(!voiceMuted);
   };
 
   return (
@@ -210,7 +211,6 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
           controls 
           autoPlay 
           loop 
-          muted 
           playsInline
           crossOrigin="anonymous"
           className="w-full h-full object-contain"
@@ -228,6 +228,14 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md ${isCloudLink ? 'bg-blue-600/80' : 'bg-yellow-600/80'}`}>
             {isCloudLink ? <><Globe size={12} /> Cloud Master</> : <><Volume2 size={12} /> Local Production</>}
           </div>
+          
+          <button 
+            onClick={toggleVoice}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md transition-all ${!voiceMuted ? 'bg-blue-600 shadow-lg' : 'bg-gray-800/80 hover:bg-gray-700'}`}
+          >
+            {voiceMuted ? <><VolumeX size={12} /> Moderator Voice Muted</> : <><Mic size={12} /> Moderator Voice ON</>}
+          </button>
+
           <button 
             onClick={() => setShowCaptions(!showCaptions)}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md transition-all ${showCaptions ? 'bg-blue-600 shadow-lg' : 'bg-gray-800/80 hover:bg-gray-700'}`}
@@ -247,7 +255,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
               </button>
             )}
             <button onClick={handleCopy} className="flex items-center justify-center gap-3 p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/5 font-bold text-sm text-gray-300">
-              {copied ? <Check size={18} className="text-green-500" /> : <Copy size={18} />} {copied ? 'Copied' : 'Copy Link'}
+              {copied ? <Check size={18} className="text-green-500" /> : <Globe size={18} />} {copied ? 'Copied' : 'Copy Link'}
             </button>
             <button onClick={() => {
               const email = prompt("Recipient Google Email:");

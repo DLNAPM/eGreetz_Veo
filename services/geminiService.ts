@@ -3,7 +3,7 @@ import {
   Modality,
   VideoGenerationReferenceType,
 } from '@google/genai';
-import { GenerateGreetingParams, VoiceGender, VeoModel, Occasion, GreetingTheme } from '../types';
+import { GenerateGreetingParams, VeoModel, Occasion, GreetingTheme, VoiceGender } from '../types';
 
 /**
  * Helper to decode base64 audio and get its duration in seconds.
@@ -24,27 +24,20 @@ async function getAudioDuration(base64Data: string): Promise<number> {
 }
 
 /**
- * Generates a cinematic greeting video with phonetic lip-sync.
+ * Generates a cinematic greeting video focusing on atmosphere and occasion.
  */
 export const generateGreetingVideo = async (
-  params: GenerateGreetingParams & { audioDuration?: number }
+  params: GenerateGreetingParams
 ): Promise<{ objectUrl: string; blob: Blob }> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const segmentLength = 7;
-  const audioDuration = params.audioDuration || 7;
-  // Ensure visual buffer of 4s beyond spoken audio.
-  let targetDuration = Math.ceil(audioDuration) + 4.0; 
-  
-  if (params.extended) {
-    targetDuration = Math.max(targetDuration, 15);
-  }
+  const targetDuration = params.extended ? 14 : 7;
 
   const hasReferences = !!(params.userPhoto || params.scenePhoto);
   
-  // Logic to handle retries and model escalation
   const runGeneration = async (modelOverride?: VeoModel) => {
-    const modelToUse = modelOverride || ((targetDuration > segmentLength || hasReferences) 
+    const modelToUse = modelOverride || (hasReferences 
       ? 'veo-3.1-generate-preview' 
       : 'veo-3.1-fast-generate-preview');
 
@@ -52,12 +45,11 @@ export const generateGreetingVideo = async (
     const environment = params.scenicDescription || effectiveTheme || "Cinematic Studio";
 
     const prompt = `
-      CINEMATIC PRODUCTION: A high-quality visual greeting for ${params.occasion !== Occasion.NONE ? params.occasion : 'a special event'}.
-      SCENE: ${environment}. 
-      VISUAL STYLE: Cinematic lighting, professional 8k photography, realistic textures.
-      PERFORMANCE: A character is center-frame, looking at the camera and clearly speaking the following message: "${params.message}". 
-      LIP-SYNC: Synchronize mouth movements to the spoken words of the script.
-      TECHNICAL: The output video file should be silent.
+      CINEMATIC PRODUCTION: A high-quality visual atmosphere for a ${params.occasion !== Occasion.NONE ? params.occasion : 'special celebration'}.
+      ENVIRONMENT: ${environment}. 
+      VISUAL STYLE: Professional 8k cinematography, cinematic lighting, elegant camera movements.
+      MOOD: The video should capture the essence of ${params.occasion} and the beauty of ${environment}.
+      TECHNICAL: Silent video output.
     `.trim();
 
     const payload: any = {
@@ -93,14 +85,12 @@ export const generateGreetingVideo = async (
       await new Promise((resolve) => setTimeout(resolve, 10000));
       operation = await ai.operations.getVideosOperation({ operation: operation });
       if (operation.error) {
-        console.warn(`[Gemini] Operation reported error: ${operation.error.message}`);
         throw new Error(operation.error.message);
       }
     }
 
     const videoAsset = operation.response?.generatedVideos?.[0]?.video;
     if (!videoAsset) {
-      console.warn("[Gemini] Operation completed but returned no video asset. This might be a safety filter trigger.");
       throw new Error("EMPTY_RESULT");
     }
 
@@ -110,22 +100,19 @@ export const generateGreetingVideo = async (
   try {
     let currentVideoAsset;
     try {
-      // Attempt 1: Standard logic
       currentVideoAsset = await runGeneration();
     } catch (e: any) {
-      console.warn("[Gemini] First production attempt failed, retrying with stable model...");
-      // Attempt 2: Escalate to standard (non-fast) model for better stability
+      console.warn("[Gemini] First attempt failed, retrying with stable model...");
       currentVideoAsset = await runGeneration(VeoModel.VEO);
     }
     
     let currentProducedDuration = segmentLength;
     
-    // Extension loop for longer scripts
     while (currentProducedDuration < targetDuration) {
       try {
         const extensionPayload = {
           model: 'veo-3.1-generate-preview',
-          prompt: `Continue the cinematic scene with perfect visual continuity. The character finishes saying: "${params.message}". Keep the video silent.`,
+          prompt: `Seamlessly continue the cinematic shot with matching lighting and atmosphere for ${params.occasion}.`,
           video: currentVideoAsset,
           config: {
             numberOfVideos: 1,
@@ -149,7 +136,6 @@ export const generateGreetingVideo = async (
           break; 
         }
       } catch (extError) {
-        console.warn("[Gemini] Extension failed, returning video generated so far.");
         break;
       }
     }
@@ -163,9 +149,9 @@ export const generateGreetingVideo = async (
     }
   } catch (error: any) {
     console.error("[Gemini] Production Pipeline Failure:", error);
-    throw new Error(error.message === "EMPTY_RESULT" ? "The model was unable to generate a video for this prompt. Try simplifying your message or description." : error.message);
+    throw new Error(error.message === "EMPTY_RESULT" ? "Model generation error. Try simplifying your description." : error.message);
   }
-  throw new Error('Video production pipeline reached an unexpected end.');
+  throw new Error('Video production pipeline failure.');
 };
 
 /**
@@ -215,6 +201,6 @@ export const generateGreetingVoice = async (params: GenerateGreetingParams): Pro
     return { base64: base64Audio, duration, blob };
   } catch (e) {
     console.error("[Gemini] Voice Generation failed:", e);
-    throw e;
+    return null;
   }
 };

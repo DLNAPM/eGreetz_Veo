@@ -112,30 +112,26 @@ const App: React.FC = () => {
     setAppState(AppState.LOADING);
     
     try {
-      const voiceResult = await generateGreetingVoice(params);
-      const audioDuration = voiceResult?.duration || 7;
-      const audioBase64 = voiceResult?.base64;
-      const voiceBlob = voiceResult?.blob;
-
-      const { blob } = await generateGreetingVideo({ 
-        ...params, 
-        audioDuration 
-      });
+      // Parallel generation of video and voice
+      const [videoResult, voiceResult] = await Promise.all([
+        generateGreetingVideo(params),
+        generateGreetingVoice(params)
+      ]);
       
       let videoUrl = "";
-      let musicUrl = "";
       let voiceUrl = "";
+      let musicUrl = "";
       let newRecord: GreetingRecord | undefined;
 
       if (isFirebaseReady) {
         const uploads: Promise<string>[] = [
-          uploadVideoToCloud(blob, user.uid)
+          uploadVideoToCloud(videoResult.blob, user.uid)
         ];
         
-        if (voiceBlob) {
-          uploads.push(uploadAudioToCloud(voiceBlob, user.uid));
+        if (voiceResult) {
+          uploads.push(uploadAudioToCloud(voiceResult.blob, user.uid));
         }
-
+        
         if (params.backgroundMusic) {
           uploads.push(uploadAudioToCloud(params.backgroundMusic.file, user.uid));
         }
@@ -144,7 +140,10 @@ const App: React.FC = () => {
         videoUrl = results[0];
         
         let idx = 1;
-        if (voiceBlob) voiceUrl = results[idx++];
+        if (voiceResult) {
+          voiceUrl = results[idx++];
+        }
+
         if (params.backgroundMusic) {
           musicUrl = results[idx++];
         } else {
@@ -175,7 +174,8 @@ const App: React.FC = () => {
         }
         loadData(user);
       } else {
-        videoUrl = URL.createObjectURL(blob);
+        videoUrl = URL.createObjectURL(videoResult.blob);
+        voiceUrl = voiceResult ? `data:audio/pcm;base64,${voiceResult.base64}` : "";
         musicUrl = params.backgroundMusic ? URL.createObjectURL(params.backgroundMusic.file) : "";
       }
 
@@ -183,15 +183,12 @@ const App: React.FC = () => {
         url: videoUrl, 
         params, 
         record: newRecord,
-        audioUrl: !voiceUrl ? audioBase64 : undefined,
         voiceUrl: voiceUrl,
         backgroundMusicUrl: musicUrl
       });
       setAppState(AppState.SUCCESS);
     } catch (e: any) {
       console.error("Production Error:", e);
-      
-      // Handle the "Requested entity was not found" error by prompting for key re-selection
       if (e.message?.includes("API Key") || e.message?.includes("not found")) {
         alert("Session or API key expired. Please re-select your Paid API Key.");
         if (window.aistudio) {
@@ -201,7 +198,6 @@ const App: React.FC = () => {
       } else {
         alert("Production Error: " + e.message);
       }
-      
       setAppState(user ? AppState.GALLERY : AppState.IDLE);
     } finally {
       setIsLoading(false);
