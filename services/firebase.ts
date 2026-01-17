@@ -184,11 +184,11 @@ export const sendToInternalUser = async (senderName: string, recipientEmail: str
   if (!db) throw new Error("Database unavailable.");
   const shareRef = collection(db, 'shared_greetings');
   await addDoc(shareRef, {
-    recipientEmail: recipientEmail.toLowerCase(),
+    recipientEmail: recipientEmail.toLowerCase().trim(),
     senderName,
     greetingId: greeting.id,
     videoUrl: greeting.videoUrl,
-    voiceUrl: greeting.voiceUrl || null, // Persist synthesized voice in sharing
+    voiceUrl: greeting.voiceUrl || null,
     occasion: greeting.occasion,
     message: greeting.message,
     theme: greeting.theme,
@@ -197,6 +197,14 @@ export const sendToInternalUser = async (senderName: string, recipientEmail: str
     sharedAt: serverTimestamp(),
     createdAt: greeting.createdAt
   });
+};
+
+/**
+ * Group Share: Sends a greeting to multiple users.
+ */
+export const sendToGroup = async (senderName: string, emails: string[], greeting: GreetingRecord) => {
+  const tasks = emails.map(email => sendToInternalUser(senderName, email, greeting));
+  await Promise.all(tasks);
 };
 
 /**

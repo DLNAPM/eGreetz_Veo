@@ -1,6 +1,7 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { GenerateGreetingParams, GreetingRecord } from '../types';
-import { RefreshCw, LayoutGrid, Globe, Volume2, Share, Users, Type, VolumeX, Mic, Check, Volume1 } from 'lucide-react';
+import { RefreshCw, LayoutGrid, Globe, Volume2, Share, Users, Type, VolumeX, Mic, Check, Volume1, UserPlus } from 'lucide-react';
 
 interface Props {
   result: { 
@@ -13,7 +14,7 @@ interface Props {
   };
   onRestart: () => void;
   onGoGallery: () => void;
-  onInternalShare?: (email: string) => void;
+  onInternalShare?: (emails: string[]) => void;
 }
 
 /**
@@ -197,6 +198,27 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     setVoiceMuted(!voiceMuted);
   };
 
+  const handleIndividualShare = () => {
+    const email = prompt("Recipient Google Email:");
+    if (email && email.trim() && onInternalShare) {
+      onInternalShare([email.trim()]);
+    }
+  };
+
+  const handleGroupShare = () => {
+    const emailsStr = prompt("Enter recipient emails separated by commas (Group Chat Blast):");
+    if (emailsStr && emailsStr.trim() && onInternalShare) {
+      const emails = emailsStr.split(',')
+        .map(e => e.trim())
+        .filter(e => e.length > 5 && e.includes('@'));
+      if (emails.length > 0) {
+        onInternalShare(emails);
+      } else {
+        alert("No valid email addresses found.");
+      }
+    }
+  };
+
   return (
     <div className="w-full max-w-4xl animate-in zoom-in duration-500">
       <div className="text-center mb-10">
@@ -251,17 +273,19 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
           <div className="grid grid-cols-2 gap-4">
             {canNativeShare && (
               <button onClick={() => navigator.share({url: shareUrl})} className="col-span-2 flex items-center justify-center gap-3 p-5 bg-blue-600 text-white hover:bg-blue-500 rounded-2xl transition-all font-black text-sm uppercase tracking-widest">
-                <Share size={20} /> App Share
+                <Share size={20} /> Social Share
               </button>
             )}
             <button onClick={handleCopy} className="flex items-center justify-center gap-3 p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/5 font-bold text-sm text-gray-300">
               {copied ? <Check size={18} className="text-green-500" /> : <Globe size={18} />} {copied ? 'Copied' : 'Copy Link'}
             </button>
-            <button onClick={() => {
-              const email = prompt("Recipient Google Email:");
-              if (email && onInternalShare) onInternalShare(email.trim());
-            }} className="flex items-center justify-center gap-3 p-4 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-2xl font-bold text-sm hover:bg-blue-600/20">
-              <Users size={18} /> Direct Send
+            <div className="flex flex-col gap-2">
+               <button onClick={handleIndividualShare} className="w-full flex items-center justify-center gap-3 p-4 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-2xl font-bold text-sm hover:bg-blue-600/20">
+                <UserPlus size={18} /> Direct Send
+              </button>
+            </div>
+            <button onClick={handleGroupShare} className="col-span-2 flex items-center justify-center gap-3 p-4 bg-purple-600/10 text-purple-400 border border-purple-500/20 rounded-2xl font-bold text-sm hover:bg-purple-600/20">
+              <Users size={18} /> Group Blast / Chat Group
             </button>
           </div>
         </div>

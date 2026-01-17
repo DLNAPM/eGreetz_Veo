@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   loginWithGoogle, 
@@ -12,6 +13,7 @@ import {
   uploadAudioToCloud,
   getReceivedGreetings,
   sendToInternalUser,
+  sendToGroup,
   type User 
 } from './services/firebase';
 import { AppState, GenerateGreetingParams, GreetingRecord, VeoModel, AspectRatio, VoiceGender } from './types';
@@ -205,7 +207,7 @@ const App: React.FC = () => {
   };
 
   const handleEdit = (greeting: GreetingRecord) => {
-    setEditingGreeting(greeting);
+    setEditingGreeting(editingGreeting);
     setAppState(AppState.IDLE);
   };
 
@@ -230,6 +232,21 @@ const App: React.FC = () => {
       }
     });
     setAppState(AppState.SUCCESS);
+  };
+
+  const handleInternalShare = async (recipients: string[]) => {
+    if (!currentResult?.record || !user) return;
+    try {
+      if (recipients.length === 1) {
+        await sendToInternalUser(user.displayName || "Friend", recipients[0], currentResult.record);
+      } else {
+        await sendToGroup(user.displayName || "Friend", recipients, currentResult.record);
+      }
+      alert(`Greeting shared with ${recipients.length} ${recipients.length === 1 ? 'recipient' : 'recipients'}!`);
+    } catch (err: any) {
+      console.error("Share failed:", err);
+      alert("Failed to share greeting.");
+    }
   };
 
   if (isAuthInitializing) {
@@ -339,12 +356,7 @@ const App: React.FC = () => {
             result={currentResult} 
             onRestart={() => { setEditingGreeting(null); setAppState(AppState.IDLE); }} 
             onGoGallery={() => setAppState(AppState.GALLERY)}
-            onInternalShare={async (email) => { 
-              if(currentResult.record) {
-                await sendToInternalUser(user?.displayName || "Friend", email, currentResult.record);
-                alert("Shared!");
-              }
-            }}
+            onInternalShare={handleInternalShare}
           />
         )}
       </main>
