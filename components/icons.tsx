@@ -13,6 +13,9 @@ import {
   Image,
   Film,
   Tv,
+  MessageSquare,
+  Smartphone,
+  Share2,
 } from 'lucide-react';
 
 const defaultProps = {
@@ -73,4 +76,16 @@ export const TvIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
 
 export const FilmIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   <Film {...defaultProps} {...props as any} />
+);
+
+export const MessageSquareIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <MessageSquare {...defaultProps} {...props as any} />
+);
+
+export const SmartphoneIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <Smartphone {...defaultProps} {...props as any} />
+);
+
+export const ShareIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <Share2 {...defaultProps} {...props as any} />
 );

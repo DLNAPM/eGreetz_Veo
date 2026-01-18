@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { GenerateGreetingParams, GreetingRecord } from '../types';
-import { RefreshCw, LayoutGrid, Globe, Volume2, Share, Users, Type, VolumeX, Mic, Check, Volume1, UserPlus } from 'lucide-react';
+import { RefreshCw, LayoutGrid, Globe, Volume2, Share, Users, Type, VolumeX, Mic, Check, Volume1, UserPlus, MessageSquare, Smartphone } from 'lucide-react';
 
 interface Props {
   result: { 
@@ -219,6 +219,25 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     }
   };
 
+  const handleNativeShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'eGreetz Cinematic Greeting',
+          text: `Check out this cinematic greeting for ${result.params.occasion}!`,
+          url: shareUrl
+        });
+      } catch (err) {
+        console.error("Share failed:", err);
+      }
+    }
+  };
+
+  const handleSmsShare = () => {
+    const message = `Check out this cinematic greeting for ${result.params.occasion}! ${shareUrl}`;
+    window.location.href = `sms:?&body=${encodeURIComponent(message)}`;
+  };
+
   return (
     <div className="w-full max-w-4xl animate-in zoom-in duration-500">
       <div className="text-center mb-10">
@@ -269,26 +288,48 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="bg-[#111114] border border-white/10 rounded-3xl p-8">
-          <h3 className="text-xl font-black mb-6 flex items-center gap-3 text-white">Share Masterpiece</h3>
-          <div className="grid grid-cols-2 gap-4">
+          <h3 className="text-xl font-black mb-6 flex items-center gap-3 text-white uppercase tracking-tight">Share Studio</h3>
+          
+          <div className="grid grid-cols-1 gap-4">
+            {/* Primary Mobile/Chat Group Share */}
             {canNativeShare && (
-              <button onClick={() => navigator.share({url: shareUrl})} className="col-span-2 flex items-center justify-center gap-3 p-5 bg-blue-600 text-white hover:bg-blue-500 rounded-2xl transition-all font-black text-sm uppercase tracking-widest">
-                <Share size={20} /> Social Share
+              <button 
+                onClick={handleNativeShare} 
+                className="w-full flex items-center justify-center gap-3 p-5 bg-blue-600 text-white hover:bg-blue-500 rounded-2xl transition-all font-black text-sm uppercase tracking-widest shadow-lg shadow-blue-600/20"
+              >
+                <Share size={20} /> Send to Chat Group (WhatsApp / iMessage)
               </button>
             )}
-            <button onClick={handleCopy} className="flex items-center justify-center gap-3 p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/5 font-bold text-sm text-gray-300">
-              {copied ? <Check size={18} className="text-green-500" /> : <Globe size={18} />} {copied ? 'Copied' : 'Copy Link'}
+
+            {/* Specialized Text/SMS Button */}
+            <button 
+              onClick={handleSmsShare} 
+              className="w-full flex items-center justify-center gap-3 p-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl font-bold text-sm text-gray-200"
+            >
+              <MessageSquare size={18} className="text-blue-400" /> Send via Text / SMS Group
             </button>
-            <div className="flex flex-col gap-2">
-               <button onClick={handleIndividualShare} className="w-full flex items-center justify-center gap-3 p-4 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-2xl font-bold text-sm hover:bg-blue-600/20">
+
+            <div className="h-px bg-white/5 my-2"></div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <button onClick={handleIndividualShare} className="flex items-center justify-center gap-3 p-4 bg-blue-600/10 text-blue-400 border border-blue-500/20 rounded-2xl font-bold text-sm hover:bg-blue-600/20">
                 <UserPlus size={18} /> Direct Send
               </button>
+              <button onClick={handleGroupShare} className="flex items-center justify-center gap-3 p-4 bg-purple-600/10 text-purple-400 border border-purple-500/20 rounded-2xl font-bold text-sm hover:bg-purple-600/20">
+                <Users size={18} /> Group Blast
+              </button>
             </div>
-            <button onClick={handleGroupShare} className="col-span-2 flex items-center justify-center gap-3 p-4 bg-purple-600/10 text-purple-400 border border-purple-500/20 rounded-2xl font-bold text-sm hover:bg-purple-600/20">
-              <Users size={18} /> Group Blast / Chat Group
+
+            <button onClick={handleCopy} className="w-full flex items-center justify-center gap-3 p-4 bg-white/5 hover:bg-white/10 rounded-2xl border border-white/5 font-bold text-sm text-gray-400">
+              {copied ? <Check size={18} className="text-green-500" /> : <Globe size={18} />} {copied ? 'Link Copied to Clipboard' : 'Copy Master Link'}
             </button>
           </div>
+          
+          <p className="mt-4 text-[10px] text-gray-600 text-center font-medium uppercase tracking-widest italic">
+            Tip: Use the search bar in your messaging app to find and send to existing groups.
+          </p>
         </div>
+
         <div className="flex flex-col gap-4 justify-center">
           <button onClick={onRestart} className="w-full py-5 bg-blue-600 text-white font-black rounded-3xl flex items-center justify-center gap-3 hover:bg-blue-500 transition-all text-lg uppercase tracking-wider shadow-2xl shadow-blue-600/20">
             <RefreshCw size={22} /> New Masterpiece
