@@ -25,6 +25,7 @@ import {
   deleteDoc, 
   doc, 
   updateDoc,
+  getDoc,
   serverTimestamp,
   type Firestore
 } from 'firebase/firestore';
@@ -136,7 +137,7 @@ export const uploadAudioToCloud = async (data: File | Blob, userId: string): Pro
   const isFile = data instanceof File;
   const extension = isFile ? data.name.split('.').pop() : 'pcm';
   const fileName = `audio/${userId}/${Date.now()}.${extension}`;
-  const storageRef = ref(storage, fileName);
+  const storageRef = ref(storage, data);
   await uploadBytes(storageRef, data);
   return await getDownloadURL(storageRef);
 };
@@ -175,6 +176,40 @@ export const getUserGreetings = async (userId: string): Promise<GreetingRecord[]
     console.error("Fetch greetings failed:", error);
     return [];
   }
+};
+
+/**
+ * Fetches a specific greeting by ID (for Short URL Viewer)
+ */
+export const getGreetingById = async (id: string): Promise<GreetingRecord | null> => {
+  if (!db) return null;
+  const docRef = doc(db, 'greetings', id);
+  const snap = await getDoc(docRef);
+  if (snap.exists()) {
+    return { id: snap.id, ...snap.data() } as GreetingRecord;
+  }
+  return null;
+};
+
+/**
+ * Fetches a specific shared greeting by ID (for Short URL Viewer)
+ */
+export const getSharedGreetingById = async (id: string): Promise<GreetingRecord | null> => {
+  if (!db) return null;
+  const docRef = doc(db, 'shared_greetings', id);
+  const snap = await getDoc(docRef);
+  if (snap.exists()) {
+    const data = snap.data();
+    return { 
+      id: snap.id, 
+      ...data, 
+      isReceived: true,
+      videoUrl: data.videoUrl,
+      voiceUrl: data.voiceUrl,
+      backgroundMusicUrl: data.backgroundMusicUrl
+    } as any;
+  }
+  return null;
 };
 
 /**

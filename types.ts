@@ -1,3 +1,4 @@
+
 import {Video} from '@google/genai';
 
 export enum AppState {
@@ -6,7 +7,8 @@ export enum AppState {
   LOADING,
   SUCCESS,
   ERROR,
-  GALLERY
+  GALLERY,
+  VIEWER
 }
 
 export enum Occasion {
@@ -97,6 +99,8 @@ export interface GreetingRecord {
   voiceUrl?: string; // Persistent synthesized voice
   backgroundMusicUrl?: string;
   createdAt: number;
+  senderName?: string; // For shared records
+  isReceived?: boolean;
 }
 
 export interface GenerateGreetingParams {

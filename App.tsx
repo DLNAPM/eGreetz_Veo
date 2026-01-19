@@ -14,16 +14,18 @@ import {
   getReceivedGreetings,
   sendToInternalUser,
   sendToGroup,
+  getGreetingById,
+  getSharedGreetingById,
   type User 
 } from './services/firebase';
-import { AppState, GenerateGreetingParams, GreetingRecord, VeoModel, AspectRatio, VoiceGender } from './types';
+import { AppState, GenerateGreetingParams, GreetingRecord, VeoModel, AspectRatio, VoiceGender, Occasion, GreetingTheme } from './types';
 import GreetingCreator from './components/GreetingCreator';
 import GreetingGallery from './components/GreetingGallery';
 import GreetingResult from './components/GreetingResult';
 import LoadingIndicator from './components/LoadingIndicator';
 import ApiKeyDialog from './components/ApiKeyDialog';
 import HelpModal from './components/HelpModal';
-import { LogIn, LogOut, Plus, HelpCircle, RefreshCw, AlertCircle } from 'lucide-react';
+import { LogIn, LogOut, Plus, HelpCircle, RefreshCw, AlertCircle, Sparkles } from 'lucide-react';
 import { generateGreetingVideo, generateGreetingVoice } from './services/geminiService';
 
 const App: React.FC = () => {
@@ -64,6 +66,49 @@ const App: React.FC = () => {
     const init = async () => {
       setIsFirebaseReady(isFirebaseEnabled());
       
+      // Check for Short URL parameters (?v=ID or ?s=ID)
+      const urlParams = new URLSearchParams(window.location.search);
+      const greetingId = urlParams.get('v');
+      const sharedId = urlParams.get('s');
+
+      if (greetingId || sharedId) {
+        setIsLoading(true);
+        try {
+          const record = greetingId 
+            ? await getGreetingById(greetingId) 
+            : await getSharedGreetingById(sharedId!);
+          
+          if (record) {
+            setCurrentResult({
+              url: record.videoUrl,
+              record,
+              voiceUrl: record.voiceUrl,
+              backgroundMusicUrl: record.backgroundMusicUrl,
+              params: {
+                occasion: record.occasion,
+                message: record.message,
+                theme: record.theme,
+                scenicDescription: record.scenicDescription,
+                voice: record.voice || VoiceGender.FEMALE,
+                userPhoto: null,
+                scenePhoto: null,
+                backgroundMusic: null,
+                model: VeoModel.VEO_FAST,
+                aspectRatio: AspectRatio.LANDSCAPE,
+                extended: false
+              }
+            });
+            setAppState(AppState.VIEWER);
+          } else {
+            console.warn("Greeting not found");
+          }
+        } catch (err) {
+          console.error("Error loading viewer:", err);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+      
       if (window.aistudio) {
         const hasKey = await window.aistudio.hasSelectedApiKey();
         setIsKeyConnected(hasKey);
@@ -78,11 +123,16 @@ const App: React.FC = () => {
     const unsubscribe = onAuthStateChangedListener((u) => {
       setUser(u);
       setIsAuthInitializing(false);
+      
+      // Only change state from AUTH if not already in VIEWER or SUCCESS
+      const urlParams = new URLSearchParams(window.location.search);
+      const hasLink = urlParams.has('v') || urlParams.has('s');
+      
       if (u) {
         loadData(u);
-        setAppState(AppState.GALLERY);
+        if (!hasLink) setAppState(AppState.GALLERY);
       } else {
-        setAppState(AppState.AUTH);
+        if (!hasLink) setAppState(AppState.AUTH);
       }
     });
     
@@ -114,7 +164,6 @@ const App: React.FC = () => {
     setAppState(AppState.LOADING);
     
     try {
-      // Parallel generation of video and voice
       const [videoResult, voiceResult] = await Promise.all([
         generateGreetingVideo(params),
         generateGreetingVoice(params)
@@ -207,7 +256,7 @@ const App: React.FC = () => {
   };
 
   const handleEdit = (greeting: GreetingRecord) => {
-    setEditingGreeting(editingGreeting);
+    setEditingGreeting(greeting);
     setAppState(AppState.IDLE);
   };
 
@@ -257,6 +306,34 @@ const App: React.FC = () => {
     );
   }
 
+  // Pure Viewer Mode (Public)
+  if (appState === AppState.VIEWER && currentResult) {
+    return (
+      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6">
+        <div className="w-full max-w-4xl text-center mb-8">
+           <div className="inline-flex p-3 bg-blue-600/20 rounded-2xl text-blue-500 mb-4">
+              <Sparkles size={24} />
+           </div>
+           <h1 className="text-3xl font-black italic text-white uppercase tracking-tighter">You've received a greeting!</h1>
+        </div>
+        <GreetingResult 
+          result={currentResult} 
+          onRestart={() => setAppState(user ? AppState.GALLERY : AppState.AUTH)} 
+          onGoGallery={() => setAppState(AppState.GALLERY)}
+          isViewerOnly={true}
+        />
+        {!user && (
+          <button 
+            onClick={loginWithGoogle}
+            className="mt-12 px-8 py-3 bg-white/5 border border-white/10 rounded-full text-xs font-black uppercase tracking-widest hover:bg-white/10 transition-all"
+          >
+            Create Your Own eGreetz
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-black text-white flex flex-col font-sans selection:bg-blue-600/30">
       {showApiKeyDialog && <ApiKeyDialog onContinue={() => {
@@ -272,7 +349,11 @@ const App: React.FC = () => {
       <header className="px-6 py-5 flex justify-between items-center border-b border-white/5 bg-black/95 backdrop-blur-xl sticky top-0 z-50">
         <div 
           className="flex items-center gap-2 cursor-pointer group" 
-          onClick={() => setAppState(user ? AppState.GALLERY : AppState.AUTH)}
+          onClick={() => {
+            // Reset URL when going home
+            window.history.pushState({}, '', '/');
+            setAppState(user ? AppState.GALLERY : AppState.AUTH);
+          }}
         >
           <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-bold text-xl shadow-[0_0_20px_rgba(37,99,235,0.4)] group-hover:scale-105 transition-transform text-white">eG</div>
           <div className="flex flex-col">
