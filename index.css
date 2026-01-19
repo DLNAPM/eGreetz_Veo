@@ -4,24 +4,32 @@
 
 @layer base {
   :root {
-    color-scheme: dark;
+    color-scheme: light dark;
   }
 
   body {
     margin: 0;
     padding: 0;
-    background-color: #000000;
-    color: #ffffff;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
   }
 
+  /* Default app background is dark (Studio mode) */
   #root {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     width: 100%;
+    background-color: #000000;
+    color: #ffffff;
+    transition: background-color 0.5s ease, color 0.5s ease;
+  }
+
+  /* Landing page overrides the root to be light */
+  #root.landing-mode {
+    background-color: #ffffff;
+    color: #111827;
   }
 }
 
@@ -30,16 +38,12 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #000000;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1a1a1f;
+  background: #cbd5e1;
   border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #25252b;
 }
 
 .line-clamp-2 {
@@ -80,4 +84,10 @@
 @keyframes zoom-in {
   from { transform: scale(0.95); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
+}
+
+.text-gradient {
+  background: linear-gradient(to right, #2563eb, #7c3aed);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }

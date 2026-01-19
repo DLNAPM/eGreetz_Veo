@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   loginWithGoogle, 
@@ -25,6 +24,7 @@ import GreetingResult from './components/GreetingResult';
 import LoadingIndicator from './components/LoadingIndicator';
 import ApiKeyDialog from './components/ApiKeyDialog';
 import HelpModal from './components/HelpModal';
+import LandingPage from './components/LandingPage';
 import { LogIn, LogOut, Plus, HelpCircle, RefreshCw, AlertCircle, Sparkles } from 'lucide-react';
 import { generateGreetingVideo, generateGreetingVoice } from './services/geminiService';
 
@@ -61,6 +61,18 @@ const App: React.FC = () => {
       console.error("Failed to load user data:", err);
     }
   }, []);
+
+  // Update theme class on body based on state
+  useEffect(() => {
+    const root = document.getElementById('root');
+    if (root) {
+      if (appState === AppState.AUTH) {
+        root.classList.add('landing-mode');
+      } else {
+        root.classList.remove('landing-mode');
+      }
+    }
+  }, [appState]);
 
   useEffect(() => {
     const init = async () => {
@@ -335,7 +347,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col font-sans selection:bg-blue-600/30">
+    <div className="min-h-screen flex flex-col font-sans selection:bg-blue-600/30 transition-colors">
       {showApiKeyDialog && <ApiKeyDialog onContinue={() => {
         if (window.aistudio) {
           window.aistudio.openSelectKey();
@@ -346,99 +358,97 @@ const App: React.FC = () => {
 
       <HelpModal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} />
       
-      <header className="px-6 py-5 flex justify-between items-center border-b border-white/5 bg-black/95 backdrop-blur-xl sticky top-0 z-50">
-        <div 
-          className="flex items-center gap-2 cursor-pointer group" 
-          onClick={() => {
-            // Reset URL when going home
-            window.history.pushState({}, '', '/');
-            setAppState(user ? AppState.GALLERY : AppState.AUTH);
-          }}
-        >
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-bold text-xl shadow-[0_0_20px_rgba(37,99,235,0.4)] group-hover:scale-105 transition-transform text-white">eG</div>
-          <div className="flex flex-col">
-            <h1 className="text-2xl font-black tracking-tight text-white leading-none">eGreetz</h1>
-            <div className="flex items-center gap-1.5 mt-1.5">
-              <span className={`flex h-2 w-2 rounded-full ${isKeyConnected ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`}></span>
-              <span className="text-[10px] text-gray-400 font-black tracking-widest uppercase">{isKeyConnected ? 'Studio Ready' : 'Connect Key'}</span>
+      {appState !== AppState.AUTH && (
+        <header className="px-6 py-5 flex justify-between items-center border-b border-white/5 bg-black/95 backdrop-blur-xl sticky top-0 z-50">
+          <div 
+            className="flex items-center gap-2 cursor-pointer group" 
+            onClick={() => {
+              // Reset URL when going home
+              window.history.pushState({}, '', '/');
+              setAppState(user ? AppState.GALLERY : AppState.AUTH);
+            }}
+          >
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-bold text-xl shadow-[0_0_20px_rgba(37,99,235,0.4)] group-hover:scale-105 transition-transform text-white">eG</div>
+            <div className="flex flex-col">
+              <h1 className="text-2xl font-black tracking-tight text-white leading-none">eGreetz</h1>
+              <div className="flex items-center gap-1.5 mt-1.5">
+                <span className={`flex h-2 w-2 rounded-full ${isKeyConnected ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`}></span>
+                <span className="text-[10px] text-gray-400 font-black tracking-widest uppercase">{isKeyConnected ? 'Studio Ready' : 'Connect Key'}</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="flex items-center gap-4">
-          {user && (
-            <button onClick={handleRefresh} className="p-2 text-gray-400 hover:text-white transition-colors">
-              <RefreshCw size={20} className={isLoading ? 'animate-spin' : ''} />
-            </button>
-          )}
-          <button onClick={() => setShowHelpModal(true)} className="p-2 text-gray-400 hover:text-white transition-colors">
-            <HelpCircle size={22} />
-          </button>
-          {user ? (
-            <>
-              <button onClick={() => { setEditingGreeting(null); setAppState(AppState.IDLE); }} className="flex items-center gap-2 px-6 py-2 bg-blue-600 rounded-full hover:bg-blue-500 transition-all font-bold text-sm text-white">
-                <Plus size={16} strokeWidth={3} /> New Script
+          <div className="flex items-center gap-4">
+            {user && (
+              <button onClick={handleRefresh} className="p-2 text-gray-400 hover:text-white transition-colors">
+                <RefreshCw size={20} className={isLoading ? 'animate-spin' : ''} />
               </button>
-              <button onClick={logout} className="p-2 text-gray-500 hover:text-white transition-colors"><LogOut size={20} /></button>
-            </>
-          ) : (
-            <button onClick={loginWithGoogle} className="flex items-center gap-2 px-7 py-2.5 bg-white text-black font-black rounded-full hover:bg-gray-200 transition-all text-sm uppercase tracking-wider">
-              <LogIn size={16} strokeWidth={3} /> Login
+            )}
+            <button onClick={() => setShowHelpModal(true)} className="p-2 text-gray-400 hover:text-white transition-colors">
+              <HelpCircle size={22} />
             </button>
-          )}
-        </div>
-      </header>
+            {user ? (
+              <>
+                <button onClick={() => { setEditingGreeting(null); setAppState(AppState.IDLE); }} className="flex items-center gap-2 px-6 py-2 bg-blue-600 rounded-full hover:bg-blue-500 transition-all font-bold text-sm text-white">
+                  <Plus size={16} strokeWidth={3} /> New Script
+                </button>
+                <button onClick={logout} className="p-2 text-gray-500 hover:text-white transition-colors"><LogOut size={20} /></button>
+              </>
+            ) : (
+              <button onClick={loginWithGoogle} className="flex items-center gap-2 px-7 py-2.5 bg-white text-black font-black rounded-full hover:bg-gray-200 transition-all text-sm uppercase tracking-wider">
+                <LogIn size={16} strokeWidth={3} /> Login
+              </button>
+            )}
+          </div>
+        </header>
+      )}
 
-      <main className="flex-grow flex flex-col items-center p-6 w-full max-w-6xl mx-auto">
-        {!isFirebaseReady && (
+      <main className={`flex-grow flex flex-col items-center w-full ${appState === AppState.AUTH ? '' : 'p-6 max-w-6xl mx-auto'}`}>
+        {appState !== AppState.AUTH && !isFirebaseReady && (
           <div className="w-full max-w-4xl mb-6 p-4 bg-red-900/10 border border-red-500/20 rounded-2xl flex items-center gap-3 text-red-200 text-sm">
             <AlertCircle size={20} className="text-red-400" />
             <span>Cloud Sync Inactive. Sharing is limited.</span>
           </div>
         )}
 
-        {appState === AppState.AUTH && (
-          <div className="flex-grow flex flex-col items-center justify-center text-center max-w-3xl animate-in fade-in zoom-in duration-1000 mt-20">
-            <h2 className="text-7xl font-black mb-8 leading-[1] text-white tracking-tighter">Cinematic <span className="text-blue-600">Reimagined.</span></h2>
-            <p className="text-2xl text-gray-400 mb-12 leading-relaxed font-medium">Create Hollywood-grade greetings. Personal persistent storage for your cinematic legacy.</p>
-            <button onClick={user ? () => setAppState(AppState.IDLE) : loginWithGoogle} className="px-16 py-6 bg-blue-600 rounded-3xl text-2xl font-black hover:bg-blue-500 transition-all shadow-2xl shadow-blue-600/40 uppercase tracking-widest text-white">
-              {user ? 'Start Creating' : 'Login to Start'}
-            </button>
-          </div>
-        )}
+        {appState === AppState.AUTH ? (
+          <LandingPage onLogin={loginWithGoogle} />
+        ) : (
+          <>
+            {appState === AppState.GALLERY && user && (
+              <div className="w-full h-full flex flex-col">
+                <GreetingGallery 
+                  greetings={myGreetings} 
+                  receivedGreetings={receivedGreetings}
+                  onDelete={async (id) => { if(window.confirm("Delete?")) { await deleteGreeting(id); loadData(user); } }} 
+                  onEdit={handleEdit}
+                  onSelect={handleSelectGreeting}
+                  onCreateNew={() => { setEditingGreeting(null); setAppState(AppState.IDLE); }}
+                />
+              </div>
+            )}
 
-        {appState === AppState.GALLERY && user && (
-          <div className="w-full h-full flex flex-col">
-            <GreetingGallery 
-              greetings={myGreetings} 
-              receivedGreetings={receivedGreetings}
-              onDelete={async (id) => { if(window.confirm("Delete?")) { await deleteGreeting(id); loadData(user); } }} 
-              onEdit={handleEdit}
-              onSelect={handleSelectGreeting}
-              onCreateNew={() => { setEditingGreeting(null); setAppState(AppState.IDLE); }}
-            />
-          </div>
-        )}
+            {appState === AppState.IDLE && (
+              <div className="w-full flex justify-center py-6">
+                <GreetingCreator 
+                  onGenerate={handleGenerate} 
+                  onCancel={() => setAppState(user ? AppState.GALLERY : AppState.AUTH)} 
+                  initialData={editingGreeting}
+                />
+              </div>
+            )}
 
-        {appState === AppState.IDLE && (
-          <div className="w-full flex justify-center py-6">
-            <GreetingCreator 
-              onGenerate={handleGenerate} 
-              onCancel={() => setAppState(user ? AppState.GALLERY : AppState.AUTH)} 
-              initialData={editingGreeting}
-            />
-          </div>
-        )}
+            {appState === AppState.LOADING && <LoadingIndicator />}
 
-        {appState === AppState.LOADING && <LoadingIndicator />}
-
-        {appState === AppState.SUCCESS && currentResult && (
-          <GreetingResult 
-            result={currentResult} 
-            onRestart={() => { setEditingGreeting(null); setAppState(AppState.IDLE); }} 
-            onGoGallery={() => setAppState(AppState.GALLERY)}
-            onInternalShare={handleInternalShare}
-          />
+            {appState === AppState.SUCCESS && currentResult && (
+              <GreetingResult 
+                result={currentResult} 
+                onRestart={() => { setEditingGreeting(null); setAppState(AppState.IDLE); }} 
+                onGoGallery={() => setAppState(AppState.GALLERY)}
+                onInternalShare={handleInternalShare}
+              />
+            )}
+          </>
         )}
       </main>
     </div>
