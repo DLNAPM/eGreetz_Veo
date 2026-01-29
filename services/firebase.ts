@@ -1,4 +1,3 @@
-
 // Consolidated Firebase imports to resolve module member resolution errors for initializeApp, getAuth, etc.
 import { 
   initializeApp, 
@@ -96,13 +95,19 @@ if (firebaseConfig && firebaseConfig.apiKey) {
 }
 
 const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 export const isFirebaseEnabled = () => !!app && !!auth && !!db && !!storage;
 
 export const loginWithGoogle = async (): Promise<FirebaseUser> => {
   if (!auth) throw new Error("Authentication service unavailable.");
-  const result = await signInWithPopup(auth, googleProvider);
-  return result.user;
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    return result.user;
+  } catch (error: any) {
+    console.error("Google Sign-In Error:", error);
+    throw error;
+  }
 };
 
 export const logout = async (): Promise<void> => {
