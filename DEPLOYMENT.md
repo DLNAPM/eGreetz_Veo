@@ -9,6 +9,7 @@
    - Go to the **Rules** tab and paste the content of `firestore.rules`.
 5. **Cloud Storage**: Get started in **Production** mode.
    - Go to the **Rules** tab and paste the content of `storage.rules`.
+   - **Crucial**: Ensure the rules are exactly as provided in the repository to prevent "unauthorized" errors during media uploads.
 6. **Project Settings**: 
    - General > Your apps > Add app > Web.
    - Copy the `firebaseConfig` object values. You will need these for Render environment variables.
