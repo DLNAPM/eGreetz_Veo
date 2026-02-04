@@ -1,0 +1,19 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      // Allow any public user to view/play videos and audio (Required for sharing)
+      allow read: if true;
+      
+      // Allow authenticated users to upload video files to their specific folder
+      match /greetings/{userId}/{fileName} {
+        allow write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      // Allow authenticated users to upload audio files to their specific folder
+      match /audio/{userId}/{fileName} {
+        allow write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+  }
+}
