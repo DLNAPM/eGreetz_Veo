@@ -140,9 +140,9 @@ export const uploadVideoToCloud = async (blob: Blob, userId: string): Promise<st
 export const uploadAudioToCloud = async (data: File | Blob, userId: string): Promise<string> => {
   if (!storage) throw new Error("Cloud Storage unavailable.");
   const isFile = data instanceof File;
-  const extension = isFile ? data.name.split('.').pop() : 'pcm';
+  const extension = isFile ? (data as File).name.split('.').pop() : 'pcm';
   const fileName = `audio/${userId}/${Date.now()}.${extension}`;
-  const storageRef = ref(storage, data);
+  const storageRef = ref(storage, fileName);
   await uploadBytes(storageRef, data);
   return await getDownloadURL(storageRef);
 };
