@@ -37,6 +37,7 @@ export const generateGreetingVideo = async (
   const hasReferences = !!(params.userPhoto || params.scenePhoto);
   
   const runGeneration = async (modelOverride?: VeoModel) => {
+    // Force the higher quality model if using references or specific modes
     const modelToUse = modelOverride || (hasReferences 
       ? 'veo-3.1-generate-preview' 
       : 'veo-3.1-fast-generate-preview');
@@ -44,13 +45,25 @@ export const generateGreetingVideo = async (
     const effectiveTheme = params.theme === GreetingTheme.NONE ? "" : params.theme;
     const environment = params.scenicDescription || effectiveTheme || "Cinematic Studio";
 
-    const prompt = `
-      CINEMATIC PRODUCTION: A high-quality visual atmosphere for a ${params.occasion !== Occasion.NONE ? params.occasion : 'special celebration'}.
-      ENVIRONMENT: ${environment}. 
-      VISUAL STYLE: Professional 8k cinematography, cinematic lighting, elegant camera movements.
-      MOOD: The video should capture the essence of ${params.occasion} and the beauty of ${environment}.
-      TECHNICAL: Silent video output.
-    `.trim();
+    let prompt = "";
+    
+    if (params.occasion === Occasion.BEFORE_AND_AFTER) {
+      prompt = `
+        CINEMATIC TRANSFORMATION: A high-quality before-and-after sequence or split composition based on the provided reference images.
+        CONTEXT: ${environment}.
+        NARRATIVE: ${params.message}.
+        VISUAL STYLE: Professional documentary or cinematic reveal style. 8k resolution.
+        TECHNICAL: Silent video output.
+      `.trim();
+    } else {
+      prompt = `
+        CINEMATIC PRODUCTION: A high-quality visual atmosphere for a ${params.occasion !== Occasion.NONE ? params.occasion : 'special celebration'}.
+        ENVIRONMENT: ${environment}. 
+        VISUAL STYLE: Professional 8k cinematography, cinematic lighting, elegant camera movements.
+        MOOD: The video should capture the essence of ${params.occasion} and the beauty of ${environment}.
+        TECHNICAL: Silent video output.
+      `.trim();
+    }
 
     const payload: any = {
       model: modelToUse,

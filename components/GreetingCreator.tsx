@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Occasion, GreetingTheme, VoiceGender, GenerateGreetingParams, ImageFile, AudioFile, VeoModel, AspectRatio, GreetingRecord } from '../types';
-import { Mic, Upload, X, Sparkles, ChevronLeft, Clock, Zap, HelpCircle, ChevronDown, Calendar, Wind, PenTool, Music, Image as ImageIcon, Volume2 } from 'lucide-react';
+import { Mic, Upload, X, Sparkles, ChevronLeft, Clock, Zap, HelpCircle, ChevronDown, Calendar, Wind, PenTool, Music, Image as ImageIcon, Volume2, ArrowRight } from 'lucide-react';
 import HelpModal from './HelpModal';
 
 interface Props {
@@ -15,8 +15,8 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
   const [theme, setTheme] = useState<GreetingTheme>(GreetingTheme.NONE);
   const [scenicDescription, setScenicDescription] = useState('');
   const [voice, setVoice] = useState<VoiceGender>(VoiceGender.FEMALE);
-  const [photo, setPhoto] = useState<ImageFile | null>(null);
-  const [scenePhoto, setScenePhoto] = useState<ImageFile | null>(null);
+  const [photo, setPhoto] = useState<ImageFile | null>(null); // Acts as "Before" image in Before/After mode
+  const [scenePhoto, setScenePhoto] = useState<ImageFile | null>(null); // Acts as "After" image in Before/After mode
   const [audioFile, setAudioFile] = useState<AudioFile | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [extended, setExtended] = useState(false);
@@ -26,10 +26,13 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
   const sceneInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
 
+  const isBeforeAndAfter = occasion === Occasion.BEFORE_AND_AFTER;
+
   const sortedOccasions = [
     Occasion.NONE,
+    Occasion.BEFORE_AND_AFTER,
     ...Object.values(Occasion)
-      .filter(o => o !== Occasion.NONE)
+      .filter(o => o !== Occasion.NONE && o !== Occasion.BEFORE_AND_AFTER)
       .sort((a, b) => a.localeCompare(b))
   ];
   
@@ -99,6 +102,19 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
       setMessage(prev => (prev + ' ' + transcript).trim());
     };
     recognition.start();
+  };
+
+  const canSubmit = () => {
+    if (!message.trim()) return false;
+    
+    // Strict requirements for Before and After
+    if (isBeforeAndAfter) {
+      if (!photo) return false; // Missing "Before"
+      if (!scenePhoto) return false; // Missing "After"
+      if (!scenicDescription.trim()) return false; // Missing Description
+    }
+    
+    return true;
   };
 
   return (
@@ -207,50 +223,204 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
           </div>
         </div>
 
-        <div>
-          <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Scenic Description & Visual Reference</label>
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="relative flex-grow">
-              <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-blue-500">
-                <PenTool size={18} />
-              </div>
-              <input
-                type="text"
-                value={scenicDescription}
-                onChange={(e) => setScenicDescription(e.target.value)}
-                placeholder="Describe the background or upload a scene photo..."
-                className="w-full bg-[#0a0a0c] border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 hover:bg-white/5 transition-all placeholder-gray-700 h-full"
-              />
+        {/* Dynamic Image Upload Section based on Occasion */}
+        {isBeforeAndAfter ? (
+          <div className="p-6 bg-blue-900/10 border border-blue-500/20 rounded-3xl animate-in zoom-in duration-300">
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="text-blue-400" size={18} />
+              <label className="block text-xs font-bold text-blue-200 uppercase tracking-[0.2em]">Transformation Visuals (Required)</label>
             </div>
-            
-            <div className="shrink-0">
-              {scenePhoto ? (
-                <div className="relative w-32 h-14 rounded-2xl overflow-hidden border border-white/10 bg-[#0a0a0c]">
-                  <img src={URL.createObjectURL(scenePhoto.file)} alt="Scene" className="w-full h-full object-cover opacity-60" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+              {/* BEFORE IMAGE (Mapped to photo/userPhoto) */}
+              <div className="relative group">
+                {photo ? (
+                  <div className="relative w-full h-40 rounded-2xl overflow-hidden border-2 border-blue-500/30 bg-[#0a0a0c]">
+                    <img src={URL.createObjectURL(photo.file)} alt="Before" className="w-full h-full object-cover" />
+                    <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/60 rounded text-[10px] font-bold text-white">BEFORE</div>
+                    <button 
+                      onClick={() => setPhoto(null)}
+                      className="absolute top-2 right-2 p-2 bg-red-600 rounded-full text-white hover:bg-red-500 transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
                   <button 
-                    onClick={() => setScenePhoto(null)}
-                    className="absolute inset-0 flex items-center justify-center bg-black/40 hover:bg-black/60 transition-colors text-white"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full h-40 bg-[#0a0a0c] border-2 border-dashed border-blue-500/30 rounded-2xl flex flex-col items-center justify-center gap-2 text-blue-300 hover:text-white hover:bg-blue-600/10 transition-all"
                   >
-                    <X size={16} />
+                    <Upload size={24} />
+                    <span className="font-bold text-[10px] uppercase tracking-widest">Upload "Before"</span>
                   </button>
+                )}
+                <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} />
+              </div>
+
+              <div className="hidden md:flex justify-center text-blue-500">
+                <ArrowRight size={24} />
+              </div>
+
+              {/* AFTER IMAGE (Mapped to scenePhoto) */}
+              <div className="relative group">
+                {scenePhoto ? (
+                  <div className="relative w-full h-40 rounded-2xl overflow-hidden border-2 border-blue-500/30 bg-[#0a0a0c]">
+                    <img src={URL.createObjectURL(scenePhoto.file)} alt="After" className="w-full h-full object-cover" />
+                    <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/60 rounded text-[10px] font-bold text-white">AFTER</div>
+                    <button 
+                      onClick={() => setScenePhoto(null)}
+                      className="absolute top-2 right-2 p-2 bg-red-600 rounded-full text-white hover:bg-red-500 transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <button 
+                    onClick={() => sceneInputRef.current?.click()}
+                    className="w-full h-40 bg-[#0a0a0c] border-2 border-dashed border-blue-500/30 rounded-2xl flex flex-col items-center justify-center gap-2 text-blue-300 hover:text-white hover:bg-blue-600/10 transition-all"
+                  >
+                    <ImageIcon size={24} />
+                    <span className="font-bold text-[10px] uppercase tracking-widest">Upload "After"</span>
+                  </button>
+                )}
+                <input ref={sceneInputRef} type="file" className="hidden" accept="image/*" onChange={handleSceneUpload} />
+              </div>
+            </div>
+            <p className="mt-3 text-[10px] text-blue-300 text-center italic">
+              AI will interpret the transition between these two images.
+            </p>
+          </div>
+        ) : (
+          /* Standard Mode Inputs */
+          <div className="space-y-6">
+            <div>
+              <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Scenic Description & Visual Reference</label>
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="relative flex-grow">
+                  <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-blue-500">
+                    <PenTool size={18} />
+                  </div>
+                  <input
+                    type="text"
+                    value={scenicDescription}
+                    onChange={(e) => setScenicDescription(e.target.value)}
+                    placeholder="Describe the background or upload a scene photo..."
+                    className="w-full bg-[#0a0a0c] border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 hover:bg-white/5 transition-all placeholder-gray-700 h-full"
+                  />
                 </div>
-              ) : (
-                <button 
-                  onClick={() => sceneInputRef.current?.click()}
-                  className="w-32 h-14 bg-[#0a0a0c] border-2 border-dashed border-white/5 rounded-2xl flex flex-col items-center justify-center gap-1 text-gray-500 hover:text-blue-400 hover:bg-[#121214] transition-all"
-                >
-                  <ImageIcon size={18} className="opacity-30" />
-                  <span className="font-bold text-[8px] uppercase tracking-widest">Scene Ref</span>
-                </button>
-              )}
-              <input ref={sceneInputRef} type="file" className="hidden" accept="image/*" onChange={handleSceneUpload} />
+                
+                <div className="shrink-0">
+                  {scenePhoto ? (
+                    <div className="relative w-32 h-14 rounded-2xl overflow-hidden border border-white/10 bg-[#0a0a0c]">
+                      <img src={URL.createObjectURL(scenePhoto.file)} alt="Scene" className="w-full h-full object-cover opacity-60" />
+                      <button 
+                        onClick={() => setScenePhoto(null)}
+                        className="absolute inset-0 flex items-center justify-center bg-black/40 hover:bg-black/60 transition-colors text-white"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={() => sceneInputRef.current?.click()}
+                      className="w-32 h-14 bg-[#0a0a0c] border-2 border-dashed border-white/5 rounded-2xl flex flex-col items-center justify-center gap-1 text-gray-500 hover:text-blue-400 hover:bg-[#121214] transition-all"
+                    >
+                      <ImageIcon size={18} className="opacity-30" />
+                      <span className="font-bold text-[8px] uppercase tracking-widest">Scene Ref</span>
+                    </button>
+                  )}
+                  <input ref={sceneInputRef} type="file" className="hidden" accept="image/*" onChange={handleSceneUpload} />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="relative group">
+                <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Style Reference (Optional)</label>
+                {photo ? (
+                  <div className="relative w-full h-24 rounded-2xl overflow-hidden border border-white/10 bg-[#0a0a0c]">
+                    <img src={URL.createObjectURL(photo.file)} alt="Preview" className="w-full h-full object-cover opacity-60" />
+                    <div className="absolute inset-0 flex items-center justify-center gap-4">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-white drop-shadow-lg">Asset Ready</span>
+                      <button 
+                        onClick={() => setPhoto(null)}
+                        className="p-2 bg-red-600 rounded-full text-white hover:bg-red-500 transition-colors"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full h-24 bg-[#0a0a0c] border-2 border-dashed border-white/5 rounded-2xl flex flex-col items-center justify-center gap-2 text-gray-500 hover:text-blue-400 hover:bg-[#121214] transition-all"
+                  >
+                    <Upload size={20} className="opacity-30" />
+                    <span className="font-bold text-[10px] uppercase tracking-widest">Atmosphere Photo</span>
+                  </button>
+                )}
+                <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} />
+              </div>
+
+              <div className="relative group">
+                <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Background Music (Optional)</label>
+                {audioFile ? (
+                  <div className="relative w-full h-24 rounded-2xl overflow-hidden border border-white/10 bg-blue-600/5 flex items-center justify-center px-4">
+                    <div className="flex flex-col items-center">
+                      <Music size={20} className="text-blue-500 mb-1" />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-blue-400 truncate max-w-full">{audioFile.file.name}</span>
+                    </div>
+                    <button 
+                      onClick={() => setAudioFile(null)}
+                      className="absolute top-2 right-2 p-1.5 bg-red-600 rounded-full text-white hover:bg-red-500 transition-colors"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <button 
+                    onClick={() => audioInputRef.current?.click()}
+                    className="w-full h-24 bg-[#0a0a0c] border-2 border-dashed border-white/5 rounded-2xl flex flex-col items-center justify-center gap-2 text-gray-500 hover:text-blue-400 hover:bg-[#121214] transition-all text-center px-4"
+                  >
+                    <Music size={20} className="opacity-30" />
+                    <span className="font-bold text-[10px] uppercase tracking-widest">Upload Audio</span>
+                  </button>
+                )}
+                <input 
+                  ref={audioInputRef} 
+                  type="file" 
+                  className="hidden" 
+                  accept=".mp3,.m4a,audio/*" 
+                  onChange={handleAudioUpload} 
+                />
+              </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* Description Field (Only shown in Before/After here because it was inside the conditional block above for standard mode) */}
+        {isBeforeAndAfter && (
+           <div>
+             <label className="block text-xs font-bold text-blue-200 mb-3 uppercase tracking-[0.2em]">Background Description (Required)</label>
+             <div className="relative">
+               <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-blue-500">
+                 <PenTool size={18} />
+               </div>
+               <input
+                 type="text"
+                 value={scenicDescription}
+                 onChange={(e) => setScenicDescription(e.target.value)}
+                 placeholder="E.g., A messy room becoming clean, or a renovation..."
+                 className="w-full bg-[#0a0a0c] border border-blue-500/20 rounded-2xl pl-12 pr-4 py-4 text-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-600 hover:bg-white/5 transition-all placeholder-gray-700 h-full"
+               />
+             </div>
+           </div>
+        )}
 
         <div>
           <div className="flex justify-between items-center mb-3">
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-[0.2em]">Greeting Script (Subtitles)</label>
+            <label className={`text-xs font-bold uppercase tracking-[0.2em] ${isBeforeAndAfter ? 'text-blue-200' : 'text-gray-500'}`}>
+              Greeting Script {isBeforeAndAfter ? '(Required)' : ''}
+            </label>
             <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest">{message.length} / 1000</span>
           </div>
           <div className="relative">
@@ -268,68 +438,6 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
             >
               <Mic size={20} />
             </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="relative group">
-            <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Style Reference (Optional)</label>
-            {photo ? (
-              <div className="relative w-full h-24 rounded-2xl overflow-hidden border border-white/10 bg-[#0a0a0c]">
-                <img src={URL.createObjectURL(photo.file)} alt="Preview" className="w-full h-full object-cover opacity-60" />
-                <div className="absolute inset-0 flex items-center justify-center gap-4">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-white drop-shadow-lg">Asset Ready</span>
-                  <button 
-                    onClick={() => setPhoto(null)}
-                    className="p-2 bg-red-600 rounded-full text-white hover:bg-red-500 transition-colors"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button 
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full h-24 bg-[#0a0a0c] border-2 border-dashed border-white/5 rounded-2xl flex flex-col items-center justify-center gap-2 text-gray-500 hover:text-blue-400 hover:bg-[#121214] transition-all"
-              >
-                <Upload size={20} className="opacity-30" />
-                <span className="font-bold text-[10px] uppercase tracking-widest">Atmosphere Photo</span>
-              </button>
-            )}
-            <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} />
-          </div>
-
-          <div className="relative group">
-            <label className="block text-xs font-bold text-gray-500 mb-3 uppercase tracking-[0.2em]">Background Music (Optional)</label>
-            {audioFile ? (
-              <div className="relative w-full h-24 rounded-2xl overflow-hidden border border-white/10 bg-blue-600/5 flex items-center justify-center px-4">
-                <div className="flex flex-col items-center">
-                  <Music size={20} className="text-blue-500 mb-1" />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-blue-400 truncate max-w-full">{audioFile.file.name}</span>
-                </div>
-                <button 
-                  onClick={() => setAudioFile(null)}
-                  className="absolute top-2 right-2 p-1.5 bg-red-600 rounded-full text-white hover:bg-red-500 transition-colors"
-                >
-                  <X size={12} />
-                </button>
-              </div>
-            ) : (
-              <button 
-                onClick={() => audioInputRef.current?.click()}
-                className="w-full h-24 bg-[#0a0a0c] border-2 border-dashed border-white/5 rounded-2xl flex flex-col items-center justify-center gap-2 text-gray-500 hover:text-blue-400 hover:bg-[#121214] transition-all text-center px-4"
-              >
-                <Music size={20} className="opacity-30" />
-                <span className="font-bold text-[10px] uppercase tracking-widest">Upload Audio</span>
-              </button>
-            )}
-            <input 
-              ref={audioInputRef} 
-              type="file" 
-              className="hidden" 
-              accept=".mp3,.m4a,audio/*" 
-              onChange={handleAudioUpload} 
-            />
           </div>
         </div>
 
@@ -368,7 +476,7 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
               aspectRatio: AspectRatio.LANDSCAPE,
               extended 
             })}
-            disabled={!message.trim()}
+            disabled={!canSubmit()}
             className="w-full py-6 bg-blue-600 rounded-3xl font-black text-2xl flex items-center justify-center gap-5 hover:bg-blue-500 transition-all active:scale-[0.99] disabled:opacity-30 disabled:cursor-not-allowed shadow-[0_20px_60px_-15px_rgba(37,99,235,0.6)] text-white"
           >
             <Zap size={28} fill="currentColor" /> {initialData ? 'Update & Generate' : `Produce Full Production`}
