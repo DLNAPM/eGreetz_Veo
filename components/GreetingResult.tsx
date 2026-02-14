@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { GenerateGreetingParams, GreetingRecord } from '../types';
-import { RefreshCw, LayoutGrid, Globe, Volume2, Share, Users, Type, VolumeX, Mic, Check, Volume1, UserPlus, MessageSquare, Smartphone } from 'lucide-react';
+import { RefreshCw, LayoutGrid, Globe, Volume2, Share, Users, Type, VolumeX, Mic, Check, Volume1, UserPlus, MessageSquare, Smartphone, Edit3 } from 'lucide-react';
 
 interface Props {
   result: { 
@@ -15,6 +15,7 @@ interface Props {
   onRestart: () => void;
   onGoGallery: () => void;
   onInternalShare?: (emails: string[]) => void;
+  onEdit?: () => void;
   isViewerOnly?: boolean;
 }
 
@@ -50,7 +51,7 @@ function decodeBase64(base64: string) {
   return bytes;
 }
 
-const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInternalShare, isViewerOnly = false }) => {
+const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInternalShare, onEdit, isViewerOnly = false }) => {
   const [copied, setCopied] = useState(false);
   const [canNativeShare, setCanNativeShare] = useState(false);
   const [showCaptions, setShowCaptions] = useState(true);
@@ -63,6 +64,9 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
   const musicNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const voiceNodeRef = useRef<AudioBufferSourceNode | null>(null);
   
+  const trimStart = result.record?.trimStart || result.params.trimStart || 0;
+  const trimEnd = result.record?.trimEnd || result.params.trimEnd || 0;
+
   // Use Short URL if record exists, otherwise fallback to direct URL
   const shareUrl = result.record?.id 
     ? `${window.location.origin}/?v=${result.record.id}` 
@@ -136,6 +140,11 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     const video = videoRef.current;
     if (!video) return;
 
+    // Apply trim start immediately if loading freshly
+    if (video.currentTime < trimStart) {
+      video.currentTime = trimStart;
+    }
+
     const stopAudio = () => {
       if (musicNodeRef.current) {
         try { musicNodeRef.current.stop(); } catch (e) {}
@@ -168,12 +177,25 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
       }
 
       // Voice Narration (Toggleable, starts muted by default)
-      if (voiceBufferRef.current && !voiceMuted && offset < voiceBufferRef.current.duration) {
-        const vSrc = ctx.createBufferSource();
-        vSrc.buffer = voiceBufferRef.current;
-        vSrc.connect(ctx.destination);
-        vSrc.start(0, offset);
-        voiceNodeRef.current = vSrc;
+      if (voiceBufferRef.current && !voiceMuted) {
+        // Adjust audio start time relative to video. 
+        // Voice typically starts at video 0. If video starts at trimStart, voice should start at trimStart.
+        if (offset < voiceBufferRef.current.duration) {
+            const vSrc = ctx.createBufferSource();
+            vSrc.buffer = voiceBufferRef.current;
+            vSrc.connect(ctx.destination);
+            vSrc.start(0, offset);
+            voiceNodeRef.current = vSrc;
+        }
+      }
+    };
+
+    const handleTimeUpdate = () => {
+      if (trimEnd > 0 && video.currentTime >= trimEnd) {
+        video.pause();
+        video.currentTime = trimStart;
+        // Optionally loop automatically
+        video.play().catch(() => {});
       }
     };
 
@@ -181,17 +203,19 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     const onPause = () => stopAudio();
     const onSeek = () => { if (!video.paused) playAudio(video.currentTime); };
 
+    video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('play', onPlay);
     video.addEventListener('pause', onPause);
     video.addEventListener('seeked', onSeek);
 
     return () => {
+      video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('play', onPlay);
       video.removeEventListener('pause', onPause);
       video.removeEventListener('seeked', onSeek);
       stopAudio();
     };
-  }, [voiceMuted]);
+  }, [voiceMuted, trimStart, trimEnd]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(shareUrl);
@@ -246,7 +270,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
   return (
     <div className={`w-full max-w-4xl animate-in zoom-in duration-500 ${isViewerOnly ? 'mt-0' : ''}`}>
       {!isViewerOnly && (
-        <div className="text-center mb-10">
+        <div className="text-center mb-10 relative">
           <h2 className="text-5xl font-black mb-4 tracking-tighter text-white uppercase italic">Production Wrapped</h2>
           <p className="text-gray-400 font-medium italic opacity-60">"{result.params.message.substring(0, 80)}..."</p>
         </div>
@@ -332,13 +356,17 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
                 {copied ? <Check size={18} className="text-green-500" /> : <Globe size={18} />} {copied ? 'Short URL Copied' : 'Copy Short Master Link'}
               </button>
             </div>
-            
-            <p className="mt-4 text-[10px] text-gray-600 text-center font-medium uppercase tracking-widest italic leading-relaxed">
-              Tip: When the message app opens, use its built-in search bar to quickly find and select your existing groups.
-            </p>
           </div>
 
           <div className="flex flex-col gap-4 justify-center">
+             {onEdit && (
+                <button 
+                   onClick={onEdit} 
+                   className="w-full py-5 bg-purple-600 hover:bg-purple-500 text-white font-black rounded-3xl flex items-center justify-center gap-3 transition-all text-lg uppercase tracking-wider shadow-2xl shadow-purple-600/20"
+                >
+                   <Edit3 size={22} /> Edit in Proof Studio
+                </button>
+             )}
             <button onClick={onRestart} className="w-full py-5 bg-blue-600 text-white font-black rounded-3xl flex items-center justify-center gap-3 hover:bg-blue-500 transition-all text-lg uppercase tracking-wider shadow-2xl shadow-blue-600/20">
               <RefreshCw size={22} /> New Masterpiece
             </button>

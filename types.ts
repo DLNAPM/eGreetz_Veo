@@ -8,7 +8,8 @@ export enum AppState {
   SUCCESS,
   ERROR,
   GALLERY,
-  VIEWER
+  VIEWER,
+  PROOF_STUDIO
 }
 
 export enum Occasion {
@@ -99,6 +100,8 @@ export interface GreetingRecord {
   voice?: VoiceGender;
   voiceUrl?: string; // Persistent synthesized voice
   backgroundMusicUrl?: string;
+  trimStart?: number;
+  trimEnd?: number;
   createdAt: number;
   senderName?: string; // For shared records
   isReceived?: boolean;
@@ -116,6 +119,8 @@ export interface GenerateGreetingParams {
   model: VeoModel;
   aspectRatio: AspectRatio;
   extended: boolean;
+  trimStart?: number;
+  trimEnd?: number;
 }
 
 export interface GenerateVideoParams {

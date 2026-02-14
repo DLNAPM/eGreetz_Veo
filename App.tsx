@@ -25,6 +25,7 @@ import LoadingIndicator from './components/LoadingIndicator';
 import ApiKeyDialog from './components/ApiKeyDialog';
 import HelpModal from './components/HelpModal';
 import LandingPage from './components/LandingPage';
+import ProofStudio from './components/ProofStudio';
 import { LogIn, LogOut, Plus, HelpCircle, RefreshCw, AlertCircle, Sparkles } from 'lucide-react';
 import { generateGreetingVideo, generateGreetingVoice } from './services/geminiService';
 
@@ -107,7 +108,9 @@ const App: React.FC = () => {
                 backgroundMusic: null,
                 model: VeoModel.VEO_FAST,
                 aspectRatio: AspectRatio.LANDSCAPE,
-                extended: false
+                extended: false,
+                trimStart: record.trimStart,
+                trimEnd: record.trimEnd
               }
             });
             setAppState(AppState.VIEWER);
@@ -289,10 +292,104 @@ const App: React.FC = () => {
         backgroundMusic: null,
         model: VeoModel.VEO_FAST,
         aspectRatio: AspectRatio.LANDSCAPE,
-        extended: false
+        extended: false,
+        trimStart: greeting.trimStart,
+        trimEnd: greeting.trimEnd
       }
     });
     setAppState(AppState.SUCCESS);
+  };
+
+  // Proof Studio Logic
+  const handleProofSave = async (updatedParams: GenerateGreetingParams, newVoiceBlob?: Blob, newMusicFile?: File, asCopy: boolean = false) => {
+    if (!user || !currentResult) return;
+    setIsLoading(true);
+
+    try {
+        let voiceUrl = currentResult.voiceUrl;
+        let musicUrl = currentResult.backgroundMusicUrl;
+
+        // Upload new voice if generated
+        if (newVoiceBlob && isFirebaseReady) {
+            voiceUrl = await uploadAudioToCloud(newVoiceBlob, user.uid);
+        } else if (newVoiceBlob) {
+            // Local fallback
+            voiceUrl = URL.createObjectURL(newVoiceBlob);
+        }
+
+        // Upload new music if selected
+        if (newMusicFile && isFirebaseReady) {
+            musicUrl = await uploadAudioToCloud(newMusicFile, user.uid);
+        } else if (newMusicFile) {
+            // Local fallback
+            musicUrl = URL.createObjectURL(newMusicFile);
+        }
+
+        const recordData = {
+            occasion: updatedParams.occasion,
+            message: updatedParams.message,
+            theme: updatedParams.theme,
+            scenicDescription: updatedParams.scenicDescription,
+            videoUrl: currentResult.url,
+            voice: updatedParams.voice,
+            voiceUrl: voiceUrl,
+            backgroundMusicUrl: musicUrl,
+            trimStart: updatedParams.trimStart,
+            trimEnd: updatedParams.trimEnd
+        };
+
+        let finalRecord: GreetingRecord;
+
+        if (isFirebaseReady) {
+            if (asCopy) {
+                // Create New
+                 const docRef = await saveGreeting(user.uid, {
+                    ...recordData,
+                    userId: user.uid,
+                    createdAt: Date.now()
+                });
+                finalRecord = { id: docRef.id, userId: user.uid, ...recordData, createdAt: Date.now() };
+            } else if (currentResult.record) {
+                // Update Existing
+                await updateGreeting(currentResult.record.id, recordData);
+                finalRecord = { ...currentResult.record, ...recordData };
+            } else {
+                 // Save for first time (if currentResult was transient)
+                 const docRef = await saveGreeting(user.uid, {
+                    ...recordData,
+                    userId: user.uid,
+                    createdAt: Date.now()
+                });
+                finalRecord = { id: docRef.id, userId: user.uid, ...recordData, createdAt: Date.now() };
+            }
+            loadData(user);
+        } else {
+            // Offline/Transient mode
+            finalRecord = { 
+                id: 'transient', 
+                userId: 'local', 
+                createdAt: Date.now(), 
+                ...recordData 
+            } as GreetingRecord;
+        }
+
+        // Update current result state
+        setCurrentResult({
+            url: currentResult.url,
+            params: updatedParams,
+            record: finalRecord,
+            voiceUrl: voiceUrl,
+            backgroundMusicUrl: musicUrl
+        });
+
+        setAppState(AppState.SUCCESS);
+
+    } catch (e: any) {
+        console.error("Proof Save Failed:", e);
+        alert("Failed to save proof edits.");
+    } finally {
+        setIsLoading(false);
+    }
   };
 
   const handleInternalShare = async (recipients: string[]) => {
@@ -440,12 +537,27 @@ const App: React.FC = () => {
 
             {appState === AppState.LOADING && <LoadingIndicator />}
 
+            {appState === AppState.PROOF_STUDIO && currentResult && (
+               <div className="w-full flex justify-center py-6">
+                 <ProofStudio
+                    initialParams={currentResult.params}
+                    videoUrl={currentResult.url}
+                    initialVoiceUrl={currentResult.voiceUrl}
+                    initialMusicUrl={currentResult.backgroundMusicUrl}
+                    onSave={(p, v, m) => handleProofSave(p, v, m, false)}
+                    onSaveCopy={(p, v, m) => handleProofSave(p, v, m, true)}
+                    onCancel={() => setAppState(AppState.SUCCESS)}
+                 />
+               </div>
+            )}
+
             {appState === AppState.SUCCESS && currentResult && (
               <GreetingResult 
                 result={currentResult} 
                 onRestart={() => { setEditingGreeting(null); setAppState(AppState.IDLE); }} 
                 onGoGallery={() => setAppState(AppState.GALLERY)}
                 onInternalShare={handleInternalShare}
+                onEdit={() => setAppState(AppState.PROOF_STUDIO)}
               />
             )}
           </>
