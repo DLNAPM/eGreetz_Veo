@@ -110,7 +110,8 @@ const App: React.FC = () => {
                 aspectRatio: AspectRatio.LANDSCAPE,
                 extended: false,
                 trimStart: record.trimStart,
-                trimEnd: record.trimEnd
+                trimEnd: record.trimEnd,
+                fadeOut: record.fadeOut
               }
             });
             setAppState(AppState.VIEWER);
@@ -294,7 +295,8 @@ const App: React.FC = () => {
         aspectRatio: AspectRatio.LANDSCAPE,
         extended: false,
         trimStart: greeting.trimStart,
-        trimEnd: greeting.trimEnd
+        trimEnd: greeting.trimEnd,
+        fadeOut: greeting.fadeOut
       }
     });
     setAppState(AppState.SUCCESS);
@@ -335,7 +337,8 @@ const App: React.FC = () => {
             voiceUrl: voiceUrl,
             backgroundMusicUrl: musicUrl,
             trimStart: updatedParams.trimStart,
-            trimEnd: updatedParams.trimEnd
+            trimEnd: updatedParams.trimEnd,
+            fadeOut: updatedParams.fadeOut
         };
 
         let finalRecord: GreetingRecord;

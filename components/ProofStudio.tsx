@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GenerateGreetingParams, VoiceGender, AudioFile } from '../types';
-import { Play, Pause, Save, X, Music, Mic, Volume2, Scissors, Copy, RotateCcw } from 'lucide-react';
+import { Play, Pause, Save, X, Music, Mic, Volume2, Scissors, Copy, RotateCcw, Sunrise, Sunset } from 'lucide-react';
 import { generateGreetingVoice } from '../services/geminiService';
 
 interface Props {
@@ -27,6 +27,7 @@ const ProofStudio: React.FC<Props> = ({
   const [voice, setVoice] = useState(initialParams.voice);
   const [trimStart, setTrimStart] = useState(initialParams.trimStart || 0);
   const [trimEnd, setTrimEnd] = useState(initialParams.trimEnd || 0);
+  const [fadeOut, setFadeOut] = useState(initialParams.fadeOut || false);
   const [videoDuration, setVideoDuration] = useState(0);
   
   // Media State
@@ -37,12 +38,12 @@ const ProofStudio: React.FC<Props> = ({
   
   // Playback State
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-
+  
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const voiceAudioRef = useRef<HTMLAudioElement>(null);
   const musicAudioRef = useRef<HTMLAudioElement>(null);
+  const animationFrameRef = useRef<number>();
 
   // Initialize duration
   const handleLoadedMetadata = () => {
@@ -65,9 +66,7 @@ const ProofStudio: React.FC<Props> = ({
         if (video.paused) {
           voiceAudioRef.current.pause();
         } else {
-          // Adjust for trim start? Usually voice starts at 0 relative to video start
-          // but if we trim video start, we might want to offset voice. 
-          // For simplicity, voice aligns with video playback time.
+          // Sync voice to video time (relative to trim start if needed, but keeping simple alignment here)
           const audioTime = video.currentTime - trimStart; 
           if (audioTime >= 0) {
               voiceAudioRef.current.currentTime = audioTime;
@@ -85,30 +84,69 @@ const ProofStudio: React.FC<Props> = ({
       }
     };
 
-    const handleTimeUpdate = () => {
-      setCurrentTime(video.currentTime);
-      if (trimEnd > 0 && video.currentTime >= trimEnd) {
-        video.pause();
-        video.currentTime = trimStart;
-        setIsPlaying(false);
-      }
-    };
-
     const handlePlay = () => { setIsPlaying(true); syncAudio(); };
     const handlePause = () => { setIsPlaying(false); syncAudio(); };
+    const handleSeeking = () => { syncAudio(); };
 
-    video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
-    video.addEventListener('seeking', syncAudio);
+    video.addEventListener('seeking', handleSeeking);
 
     return () => {
-      video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
-      video.removeEventListener('seeking', syncAudio);
+      video.removeEventListener('seeking', handleSeeking);
     };
-  }, [trimStart, trimEnd]);
+  }, [trimStart]);
+
+  // Real-time Loop for Trimming Check & Fading
+  useEffect(() => {
+    const loop = () => {
+      if (videoRef.current) {
+        const t = videoRef.current.currentTime;
+        
+        // Handle Loop/Stop at Trim End
+        if (trimEnd > 0 && t >= trimEnd) {
+          videoRef.current.pause();
+          videoRef.current.currentTime = trimStart;
+          setIsPlaying(false);
+          // Reset opacity/vol
+          videoRef.current.style.opacity = '1';
+          if (voiceAudioRef.current) voiceAudioRef.current.volume = 1;
+          if (musicAudioRef.current) musicAudioRef.current.volume = 1;
+        }
+
+        // Handle Fade Out
+        if (fadeOut) {
+          const fadeDuration = 3;
+          const timeLeft = trimEnd - t;
+          
+          if (timeLeft <= fadeDuration) {
+            // Calculate fade factor (1 to 0)
+            const fadeFactor = Math.max(0, Math.min(1, timeLeft / fadeDuration));
+            
+            videoRef.current.style.opacity = fadeFactor.toString();
+            if (voiceAudioRef.current) voiceAudioRef.current.volume = fadeFactor;
+            if (musicAudioRef.current) musicAudioRef.current.volume = fadeFactor;
+          } else {
+            // Reset if scrubbed back before fade
+            videoRef.current.style.opacity = '1';
+            if (voiceAudioRef.current) voiceAudioRef.current.volume = 1;
+            if (musicAudioRef.current) musicAudioRef.current.volume = 1;
+          }
+        } else {
+          // Reset if fade disabled
+          videoRef.current.style.opacity = '1';
+          if (voiceAudioRef.current) voiceAudioRef.current.volume = 1;
+          if (musicAudioRef.current) musicAudioRef.current.volume = 1;
+        }
+      }
+      animationFrameRef.current = requestAnimationFrame(loop);
+    };
+
+    loop();
+    return () => cancelAnimationFrame(animationFrameRef.current!);
+  }, [trimStart, trimEnd, fadeOut]);
 
   // Regenerate Voice Preview
   const handleRegenerateVoice = async () => {
@@ -143,7 +181,8 @@ const ProofStudio: React.FC<Props> = ({
     message,
     voice,
     trimStart,
-    trimEnd
+    trimEnd,
+    fadeOut
   });
 
   return (
@@ -155,7 +194,7 @@ const ProofStudio: React.FC<Props> = ({
           <video 
             ref={videoRef}
             src={videoUrl}
-            className="w-full h-full object-contain"
+            className="w-full h-full object-contain bg-black transition-opacity duration-75" // Added bg-black so fade to black works visually
             onLoadedMetadata={handleLoadedMetadata}
             playsInline
           />
@@ -306,15 +345,33 @@ const ProofStudio: React.FC<Props> = ({
                 </div>
             </div>
 
-            {/* Trimming Info */}
+            {/* Trimming & Fade Info */}
             <div className="space-y-4">
                 <label className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase tracking-widest">
-                    <Scissors size={14} className="text-green-500" /> Timing
+                    <Scissors size={14} className="text-green-500" /> Timing & Effects
                 </label>
-                <div className="p-4 bg-black/50 border border-white/5 rounded-xl text-xs text-gray-400 leading-relaxed">
-                    Use the sliders on the video to trim the intro and outro. 
-                    <br/><br/>
-                    <span className="text-white font-bold">Current Duration: {(trimEnd - trimStart).toFixed(1)}s</span>
+                <div className="p-4 bg-black/50 border border-white/5 rounded-xl space-y-4">
+                    <p className="text-xs text-gray-400 leading-relaxed">
+                      Use the sliders on the video to trim the intro and outro. 
+                    </p>
+                    
+                    <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                      <span className="text-xs font-bold text-gray-400">Duration</span>
+                      <span className="text-white font-bold text-sm">{(trimEnd - trimStart).toFixed(1)}s</span>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                       <div className="flex items-center gap-2">
+                          <Sunset size={14} className="text-orange-400" />
+                          <span className="text-xs font-bold text-gray-400">Fade Out (Last 3s)</span>
+                       </div>
+                       <button 
+                         onClick={() => setFadeOut(!fadeOut)}
+                         className={`relative w-10 h-5 rounded-full transition-colors ${fadeOut ? 'bg-orange-500' : 'bg-gray-700'}`}
+                       >
+                         <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform ${fadeOut ? 'translate-x-5' : ''}`} />
+                       </button>
+                    </div>
                 </div>
             </div>
         </div>

@@ -102,6 +102,7 @@ export interface GreetingRecord {
   backgroundMusicUrl?: string;
   trimStart?: number;
   trimEnd?: number;
+  fadeOut?: boolean;
   createdAt: number;
   senderName?: string; // For shared records
   isReceived?: boolean;
@@ -121,6 +122,7 @@ export interface GenerateGreetingParams {
   extended: boolean;
   trimStart?: number;
   trimEnd?: number;
+  fadeOut?: boolean;
 }
 
 export interface GenerateVideoParams {

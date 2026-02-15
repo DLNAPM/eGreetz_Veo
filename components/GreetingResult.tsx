@@ -57,15 +57,18 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
   const [showCaptions, setShowCaptions] = useState(true);
   const [voiceMuted, setVoiceMuted] = useState(true); // Narrator voice (Moderator) muted by default
   const videoRef = useRef<HTMLVideoElement>(null);
+  const animationFrameRef = useRef<number>();
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const musicBufferRef = useRef<AudioBuffer | null>(null);
   const voiceBufferRef = useRef<AudioBuffer | null>(null);
   const musicNodeRef = useRef<AudioBufferSourceNode | null>(null);
   const voiceNodeRef = useRef<AudioBufferSourceNode | null>(null);
+  const masterGainRef = useRef<GainNode | null>(null); // For Fading
   
   const trimStart = result.record?.trimStart || result.params.trimStart || 0;
   const trimEnd = result.record?.trimEnd || result.params.trimEnd || 0;
+  const fadeOut = result.record?.fadeOut || result.params.fadeOut || false;
 
   // Use Short URL if record exists, otherwise fallback to direct URL
   const shareUrl = result.record?.id 
@@ -97,6 +100,11 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
           latencyHint: 'playback'
         });
         audioContextRef.current = ctx;
+        
+        // Master Gain for Fading
+        const masterGain = ctx.createGain();
+        masterGain.connect(ctx.destination);
+        masterGainRef.current = masterGain;
 
         // Load Narrator Voice if present
         const voiceSource = result.voiceUrl || result.audioUrl;
@@ -135,7 +143,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
     };
   }, [result.backgroundMusicUrl, result.voiceUrl, result.audioUrl]);
 
-  // Sync Audio with Video Playback
+  // Sync Audio with Video Playback & Handle Fading
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -154,14 +162,18 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
         try { voiceNodeRef.current.stop(); } catch (e) {}
         voiceNodeRef.current = null;
       }
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     };
 
     const playAudio = async (offset: number) => {
       stopAudio();
       const ctx = audioContextRef.current;
-      if (!ctx || ctx.state === 'closed') return;
+      if (!ctx || ctx.state === 'closed' || !masterGainRef.current) return;
       
       if (ctx.state === 'suspended') await ctx.resume();
+
+      // Reset master gain
+      masterGainRef.current.gain.value = 1;
 
       // Background Music (Always unmuted by default)
       if (musicBufferRef.current) {
@@ -170,7 +182,8 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
         mSrc.loop = true;
         const mGain = ctx.createGain();
         mGain.gain.value = 0.25;
-        mGain.connect(ctx.destination);
+        // Connect to Master Gain (which handles fade), not direct destination
+        mGain.connect(masterGainRef.current);
         mSrc.connect(mGain);
         mSrc.start(0, offset % musicBufferRef.current.duration);
         musicNodeRef.current = mSrc;
@@ -178,44 +191,67 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
 
       // Voice Narration (Toggleable, starts muted by default)
       if (voiceBufferRef.current && !voiceMuted) {
-        // Adjust audio start time relative to video. 
-        // Voice typically starts at video 0. If video starts at trimStart, voice should start at trimStart.
+        // Adjust audio start time relative to video trim
         if (offset < voiceBufferRef.current.duration) {
             const vSrc = ctx.createBufferSource();
             vSrc.buffer = voiceBufferRef.current;
-            vSrc.connect(ctx.destination);
+            vSrc.connect(masterGainRef.current);
             vSrc.start(0, offset);
             voiceNodeRef.current = vSrc;
         }
       }
-    };
 
-    const handleTimeUpdate = () => {
-      if (trimEnd > 0 && video.currentTime >= trimEnd) {
-        video.pause();
-        video.currentTime = trimStart;
-        // Optionally loop automatically
-        video.play().catch(() => {});
-      }
+      // Start Fade Loop
+      const loop = () => {
+        const t = video.currentTime;
+        
+        // Handle trim end loop
+        if (trimEnd > 0 && t >= trimEnd) {
+          video.pause();
+          video.currentTime = trimStart;
+          video.play().catch(() => {});
+          return; // Loop restarts via 'play' event
+        }
+
+        // Apply Fade Out
+        if (fadeOut && trimEnd > 0) {
+           const fadeDuration = 3;
+           const timeLeft = trimEnd - t;
+           if (timeLeft <= fadeDuration) {
+              const factor = Math.max(0, Math.min(1, timeLeft / fadeDuration));
+              video.style.opacity = factor.toString();
+              if (masterGainRef.current) {
+                 // Smoothly ramp gain to prevent clicking, though direct assignment in RAF is usually ok for this duration
+                 masterGainRef.current.gain.setValueAtTime(factor, ctx.currentTime);
+              }
+           } else {
+              video.style.opacity = '1';
+              if (masterGainRef.current) masterGainRef.current.gain.setValueAtTime(1, ctx.currentTime);
+           }
+        } else {
+           video.style.opacity = '1';
+        }
+        
+        animationFrameRef.current = requestAnimationFrame(loop);
+      };
+      loop();
     };
 
     const onPlay = () => playAudio(video.currentTime);
     const onPause = () => stopAudio();
     const onSeek = () => { if (!video.paused) playAudio(video.currentTime); };
 
-    video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('play', onPlay);
     video.addEventListener('pause', onPause);
     video.addEventListener('seeked', onSeek);
 
     return () => {
-      video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('play', onPlay);
       video.removeEventListener('pause', onPause);
       video.removeEventListener('seeked', onSeek);
       stopAudio();
     };
-  }, [voiceMuted, trimStart, trimEnd]);
+  }, [voiceMuted, trimStart, trimEnd, fadeOut]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(shareUrl);
@@ -285,7 +321,7 @@ const GreetingResult: React.FC<Props> = ({ result, onRestart, onGoGallery, onInt
           loop 
           playsInline
           crossOrigin="anonymous"
-          className="w-full h-full object-contain"
+          className="w-full h-full object-contain bg-black transition-opacity duration-75"
         />
 
         {showCaptions && (
