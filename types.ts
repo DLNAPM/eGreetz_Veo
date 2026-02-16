@@ -92,6 +92,7 @@ export interface VideoFile {
 export interface GreetingRecord {
   id: string;
   userId: string;
+  title?: string;
   occasion: Occasion;
   message: string;
   theme: GreetingTheme;
@@ -109,6 +110,7 @@ export interface GreetingRecord {
 }
 
 export interface GenerateGreetingParams {
+  title?: string;
   occasion: Occasion;
   message: string;
   theme: GreetingTheme;

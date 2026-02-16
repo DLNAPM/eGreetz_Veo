@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GenerateGreetingParams, VoiceGender, AudioFile } from '../types';
-import { Play, Pause, Save, X, Music, Mic, Volume2, Scissors, Copy, RotateCcw, Sunrise, Sunset } from 'lucide-react';
+import { Play, Pause, Save, X, Music, Mic, Volume2, Scissors, Copy, RotateCcw, Sunrise, Sunset, Type } from 'lucide-react';
 import { generateGreetingVoice } from '../services/geminiService';
 
 interface Props {
@@ -23,6 +23,7 @@ const ProofStudio: React.FC<Props> = ({
   onCancel 
 }) => {
   // State
+  const [title, setTitle] = useState(initialParams.title || initialParams.occasion || 'My Cinematic Greeting');
   const [message, setMessage] = useState(initialParams.message);
   const [voice, setVoice] = useState(initialParams.voice);
   const [trimStart, setTrimStart] = useState(initialParams.trimStart || 0);
@@ -178,6 +179,7 @@ const ProofStudio: React.FC<Props> = ({
 
   const constructParams = (): GenerateGreetingParams => ({
     ...initialParams,
+    title,
     message,
     voice,
     trimStart,
@@ -291,6 +293,21 @@ const ProofStudio: React.FC<Props> = ({
         </h2>
 
         <div className="space-y-8">
+            
+            {/* Project Title */}
+            <div className="space-y-4">
+                <label className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase tracking-widest">
+                    <Type size={14} className="text-white" /> Project Title
+                </label>
+                <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-blue-600 placeholder-gray-700"
+                    placeholder="Enter a title..."
+                />
+            </div>
+
             {/* Script & Voice */}
             <div className="space-y-4">
                 <label className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase tracking-widest">

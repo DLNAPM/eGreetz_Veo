@@ -40,6 +40,7 @@ const GreetingGallery: React.FC<Props> = ({ greetings, receivedGreetings = [], o
       </div>
       
       <div className="p-5 border-t border-white/5">
+        <h4 className="text-white font-bold text-lg mb-2 truncate">{g.title || g.occasion}</h4>
         <p className="text-gray-300 line-clamp-2 text-sm mb-4 font-medium italic">"{g.message}"</p>
         <div className="flex justify-between items-center">
           <div className="flex flex-col">

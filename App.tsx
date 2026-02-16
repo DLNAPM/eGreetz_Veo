@@ -4,7 +4,7 @@ import {
   logout, 
   getUserGreetings, 
   saveGreeting, 
-  updateGreeting,
+  updateGreeting, 
   deleteGreeting, 
   isFirebaseEnabled, 
   onAuthStateChangedListener,
@@ -98,6 +98,7 @@ const App: React.FC = () => {
               voiceUrl: record.voiceUrl,
               backgroundMusicUrl: record.backgroundMusicUrl,
               params: {
+                title: record.title,
                 occasion: record.occasion,
                 message: record.message,
                 theme: record.theme,
@@ -218,6 +219,7 @@ const App: React.FC = () => {
         }
         
         const recordData = {
+          title: params.occasion, // Default title
           occasion: params.occasion,
           message: params.message,
           theme: params.theme,
@@ -283,6 +285,7 @@ const App: React.FC = () => {
       voiceUrl: greeting.voiceUrl,
       backgroundMusicUrl: greeting.backgroundMusicUrl,
       params: {
+        title: greeting.title,
         occasion: greeting.occasion,
         message: greeting.message,
         theme: greeting.theme,
@@ -328,6 +331,7 @@ const App: React.FC = () => {
         }
 
         const recordData = {
+            title: updatedParams.title || updatedParams.occasion,
             occasion: updatedParams.occasion,
             message: updatedParams.message,
             theme: updatedParams.theme,
