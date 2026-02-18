@@ -3,7 +3,7 @@ import {
   Modality,
   VideoGenerationReferenceType,
 } from '@google/genai';
-import { GenerateGreetingParams, VeoModel, Occasion, GreetingTheme, VoiceGender } from '../types';
+import { GenerateGreetingParams, VeoModel, Occasion, GreetingTheme, VoiceGender, Speaker, ImageFile } from '../types';
 
 /**
  * Helper to decode base64 audio and get its duration in seconds.
@@ -22,6 +22,51 @@ async function getAudioDuration(base64Data: string): Promise<number> {
     return 10;
   }
 }
+
+/**
+ * Generates a script based on the visual persona of an uploaded image.
+ */
+export const generateScriptFromImage = async (
+  image: ImageFile, 
+  occasion: Occasion,
+  existingScript: string
+): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
+  const prompt = `
+    Analyze this image. You are the character (or entity) depicted in this image.
+    Write a short, engaging, and cinematic greeting script for the occasion: "${occasion}".
+    
+    Instructions:
+    1. Write in the FIRST PERSON ("I").
+    2. Adopt the personality, tone, and vibe of the character in the image.
+    3. Keep it under 2 sentences.
+    4. If there is already text provided: "${existingScript}", use it as a base but rewrite it in the character's voice.
+    5. Return ONLY the spoken text. No stage directions.
+  `.trim();
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              mimeType: image.file.type || 'image/jpeg',
+              data: image.base64
+            }
+          },
+          { text: prompt }
+        ]
+      }
+    });
+    
+    return response.text?.trim() || "";
+  } catch (e) {
+    console.error("Script generation failed:", e);
+    return "";
+  }
+};
 
 /**
  * Generates a cinematic greeting video focusing on atmosphere and occasion.
@@ -180,11 +225,20 @@ export const generateGreetingVoice = async (params: GenerateGreetingParams): Pro
   };
 
   try {
-    const ttsPrompt = `
-      You are a professional human narrator with a warm, natural, and expressive voice.
-      Please narrate the following message with heartfelt emotion, speaking every word clearly:
-      "${params.message}"
-    `.trim();
+    const isCharacter = params.speaker === Speaker.CHARACTER;
+    
+    const ttsPrompt = isCharacter 
+      ? `
+        You are acting as the main character in a scene.
+        Adopt a persona that fits the visual context of a "${params.occasion}" celebration.
+        Speak in the first person. Be expressive, immersive, and convincing.
+        Lines: "${params.message}"
+      `.trim()
+      : `
+        You are a professional human narrator with a warm, natural, and expressive voice.
+        Please narrate the following message with heartfelt emotion, speaking every word clearly:
+        "${params.message}"
+      `.trim();
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-preview-tts",

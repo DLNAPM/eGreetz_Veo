@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GenerateGreetingParams, VoiceGender, AudioFile } from '../types';
-import { Play, Pause, Save, X, Music, Mic, Volume2, Scissors, Copy, RotateCcw, Sunrise, Sunset, Type } from 'lucide-react';
+import { GenerateGreetingParams, VoiceGender, AudioFile, Speaker } from '../types';
+import { Play, Pause, Save, X, Music, Mic, Volume2, Scissors, Copy, RotateCcw, Sunrise, Sunset, Type, User, UserCircle } from 'lucide-react';
 import { generateGreetingVoice } from '../services/geminiService';
 
 interface Props {
@@ -26,6 +26,7 @@ const ProofStudio: React.FC<Props> = ({
   const [title, setTitle] = useState(initialParams.title || initialParams.occasion || 'My Cinematic Greeting');
   const [message, setMessage] = useState(initialParams.message);
   const [voice, setVoice] = useState(initialParams.voice);
+  const [speaker, setSpeaker] = useState<Speaker>(initialParams.speaker || Speaker.MODERATOR);
   const [trimStart, setTrimStart] = useState(initialParams.trimStart || 0);
   const [trimEnd, setTrimEnd] = useState(initialParams.trimEnd || 0);
   const [fadeOut, setFadeOut] = useState(initialParams.fadeOut || false);
@@ -156,7 +157,8 @@ const ProofStudio: React.FC<Props> = ({
       const result = await generateGreetingVoice({
         ...initialParams,
         message,
-        voice
+        voice,
+        speaker // Use current speaker state
       });
       if (result) {
         const url = URL.createObjectURL(result.blob);
@@ -182,6 +184,7 @@ const ProofStudio: React.FC<Props> = ({
     title,
     message,
     voice,
+    speaker,
     trimStart,
     trimEnd,
     fadeOut
@@ -196,7 +199,7 @@ const ProofStudio: React.FC<Props> = ({
           <video 
             ref={videoRef}
             src={videoUrl}
-            className="w-full h-full object-contain bg-black transition-opacity duration-75" // Added bg-black so fade to black works visually
+            className="w-full h-full object-contain bg-black transition-opacity duration-75"
             onLoadedMetadata={handleLoadedMetadata}
             playsInline
           />
@@ -313,6 +316,23 @@ const ProofStudio: React.FC<Props> = ({
                 <label className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase tracking-widest">
                     <Mic size={14} className="text-blue-500" /> Script & Voice
                 </label>
+                
+                {/* Speaker Toggle */}
+                <div className="flex bg-black rounded-xl p-1 border border-white/10 mb-2">
+                    <button 
+                        onClick={() => setSpeaker(Speaker.MODERATOR)}
+                        className={`flex-1 py-2 text-xs uppercase font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${speaker === Speaker.MODERATOR ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                    >
+                        <User size={14} /> Moderator
+                    </button>
+                    <button 
+                        onClick={() => setSpeaker(Speaker.CHARACTER)}
+                        className={`flex-1 py-2 text-xs uppercase font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${speaker === Speaker.CHARACTER ? 'bg-purple-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}
+                    >
+                        <UserCircle size={14} /> Character
+                    </button>
+                </div>
+
                 <textarea 
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}

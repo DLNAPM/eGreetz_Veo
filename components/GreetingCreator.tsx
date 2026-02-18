@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Occasion, GreetingTheme, VoiceGender, GenerateGreetingParams, ImageFile, AudioFile, VeoModel, AspectRatio, GreetingRecord } from '../types';
-import { Mic, Upload, X, Sparkles, ChevronLeft, Clock, Zap, HelpCircle, ChevronDown, Calendar, Wind, PenTool, Music, Image as ImageIcon, Volume2, ArrowRight } from 'lucide-react';
+import { Occasion, GreetingTheme, VoiceGender, GenerateGreetingParams, ImageFile, AudioFile, VeoModel, AspectRatio, GreetingRecord, Speaker } from '../types';
+import { Mic, Upload, X, Sparkles, ChevronLeft, Clock, Zap, HelpCircle, ChevronDown, Calendar, Wind, PenTool, Music, Image as ImageIcon, Volume2, ArrowRight, Wand2, User, UserCircle } from 'lucide-react';
 import HelpModal from './HelpModal';
+import { generateScriptFromImage } from '../services/geminiService';
 
 interface Props {
   onGenerate: (params: GenerateGreetingParams) => void;
@@ -15,10 +16,12 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
   const [theme, setTheme] = useState<GreetingTheme>(GreetingTheme.NONE);
   const [scenicDescription, setScenicDescription] = useState('');
   const [voice, setVoice] = useState<VoiceGender>(VoiceGender.FEMALE);
+  const [speaker, setSpeaker] = useState<Speaker>(Speaker.MODERATOR);
   const [photo, setPhoto] = useState<ImageFile | null>(null); // Acts as "Before" image in Before/After mode
   const [scenePhoto, setScenePhoto] = useState<ImageFile | null>(null); // Acts as "After" image in Before/After mode
   const [audioFile, setAudioFile] = useState<AudioFile | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [isAutoWriting, setIsAutoWriting] = useState(false);
   const [extended, setExtended] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   
@@ -49,6 +52,7 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
       setMessage(initialData.message);
       setTheme(initialData.theme);
       if (initialData.voice) setVoice(initialData.voice);
+      if (initialData.speaker) setSpeaker(initialData.speaker);
       if (initialData.scenicDescription) setScenicDescription(initialData.scenicDescription);
     }
   }, [initialData]);
@@ -102,6 +106,28 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
       setMessage(prev => (prev + ' ' + transcript).trim());
     };
     recognition.start();
+  };
+
+  const handleAutoWriteScript = async () => {
+    const refImage = scenePhoto || photo;
+    if (!refImage) {
+      alert("Please upload a Scene or Atmosphere photo first to generate a script based on it.");
+      return;
+    }
+    
+    setIsAutoWriting(true);
+    try {
+      const script = await generateScriptFromImage(refImage, occasion, message);
+      if (script) {
+        setMessage(script);
+        setSpeaker(Speaker.CHARACTER); // Auto-switch to character speaker
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Failed to auto-write script.");
+    } finally {
+      setIsAutoWriting(false);
+    }
   };
 
   const canSubmit = () => {
@@ -418,9 +444,26 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
 
         <div>
           <div className="flex justify-between items-center mb-3">
-            <label className={`text-xs font-bold uppercase tracking-[0.2em] ${isBeforeAndAfter ? 'text-blue-200' : 'text-gray-500'}`}>
-              Greeting Script {isBeforeAndAfter ? '(Required)' : ''}
-            </label>
+            <div className="flex items-center gap-4">
+                <label className={`text-xs font-bold uppercase tracking-[0.2em] ${isBeforeAndAfter ? 'text-blue-200' : 'text-gray-500'}`}>
+                Greeting Script {isBeforeAndAfter ? '(Required)' : ''}
+                </label>
+                {/* Speaker Toggle */}
+                <div className="flex bg-[#16161a] rounded-lg p-0.5 border border-white/10">
+                    <button 
+                        onClick={() => setSpeaker(Speaker.MODERATOR)}
+                        className={`px-2 py-1 text-[10px] uppercase font-bold rounded-md transition-all flex items-center gap-1 ${speaker === Speaker.MODERATOR ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'}`}
+                    >
+                        <User size={10} /> Moderator
+                    </button>
+                    <button 
+                        onClick={() => setSpeaker(Speaker.CHARACTER)}
+                        className={`px-2 py-1 text-[10px] uppercase font-bold rounded-md transition-all flex items-center gap-1 ${speaker === Speaker.CHARACTER ? 'bg-purple-600 text-white' : 'text-gray-500 hover:text-white'}`}
+                    >
+                        <UserCircle size={10} /> Character
+                    </button>
+                </div>
+            </div>
             <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest">{message.length} / 1000</span>
           </div>
           <div className="relative">
@@ -431,13 +474,26 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
               className="w-full h-32 bg-[#0a0a0c] border border-white/5 rounded-3xl p-6 text-white text-lg placeholder-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-600 transition-all resize-none shadow-inner"
               maxLength={1000}
             />
-            <button
-              onClick={startSpeechRecognition}
-              className={`absolute bottom-4 right-4 p-3 rounded-full transition-all shadow-xl ${isRecording ? 'bg-red-500 animate-pulse text-white' : 'bg-blue-600 hover:bg-blue-500 text-white'}`}
-              title="Voice to Text"
-            >
-              <Mic size={20} />
-            </button>
+            <div className="absolute bottom-4 right-4 flex gap-2">
+                {/* Auto Write Button - Only active if we have an image */}
+                {(scenePhoto || photo) && (
+                    <button
+                        onClick={handleAutoWriteScript}
+                        disabled={isAutoWriting}
+                        className={`p-3 rounded-full transition-all shadow-xl bg-purple-600 hover:bg-purple-500 text-white ${isAutoWriting ? 'animate-pulse' : ''}`}
+                        title="Auto-Write Script from Scene Character"
+                    >
+                        <Wand2 size={20} />
+                    </button>
+                )}
+                <button
+                    onClick={startSpeechRecognition}
+                    className={`p-3 rounded-full transition-all shadow-xl ${isRecording ? 'bg-red-500 animate-pulse text-white' : 'bg-blue-600 hover:bg-blue-500 text-white'}`}
+                    title="Voice to Text"
+                >
+                    <Mic size={20} />
+                </button>
+            </div>
           </div>
         </div>
 
@@ -468,7 +524,8 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
               message, 
               theme, 
               scenicDescription,
-              voice: voice,
+              voice,
+              speaker,
               userPhoto: photo, 
               scenePhoto,
               backgroundMusic: audioFile,

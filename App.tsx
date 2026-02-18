@@ -17,7 +17,7 @@ import {
   getSharedGreetingById,
   type User 
 } from './services/firebase';
-import { AppState, GenerateGreetingParams, GreetingRecord, VeoModel, AspectRatio, VoiceGender, Occasion, GreetingTheme } from './types';
+import { AppState, GenerateGreetingParams, GreetingRecord, VeoModel, AspectRatio, VoiceGender, Occasion, GreetingTheme, Speaker } from './types';
 import GreetingCreator from './components/GreetingCreator';
 import GreetingGallery from './components/GreetingGallery';
 import GreetingResult from './components/GreetingResult';
@@ -104,6 +104,7 @@ const App: React.FC = () => {
                 theme: record.theme,
                 scenicDescription: record.scenicDescription,
                 voice: record.voice || VoiceGender.FEMALE,
+                speaker: record.speaker || Speaker.MODERATOR,
                 userPhoto: null,
                 scenePhoto: null,
                 backgroundMusic: null,
@@ -226,6 +227,7 @@ const App: React.FC = () => {
           scenicDescription: params.scenicDescription,
           videoUrl: videoUrl,
           voice: params.voice,
+          speaker: params.speaker,
           voiceUrl: voiceUrl,
           backgroundMusicUrl: musicUrl
         };
@@ -290,7 +292,8 @@ const App: React.FC = () => {
         message: greeting.message,
         theme: greeting.theme,
         scenicDescription: greeting.scenicDescription,
-        voice: greeting.voice || VoiceGender.FEMALE, 
+        voice: greeting.voice || VoiceGender.FEMALE,
+        speaker: greeting.speaker || Speaker.MODERATOR, 
         userPhoto: null,
         scenePhoto: null,
         backgroundMusic: null,
@@ -338,6 +341,7 @@ const App: React.FC = () => {
             scenicDescription: updatedParams.scenicDescription,
             videoUrl: currentResult.url,
             voice: updatedParams.voice,
+            speaker: updatedParams.speaker,
             voiceUrl: voiceUrl,
             backgroundMusicUrl: musicUrl,
             trimStart: updatedParams.trimStart,

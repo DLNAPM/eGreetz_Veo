@@ -52,6 +52,11 @@ export enum VoiceGender {
   FEMALE = 'Female'
 }
 
+export enum Speaker {
+  MODERATOR = 'Moderator',
+  CHARACTER = 'Main Character'
+}
+
 export enum VeoModel {
   VEO_FAST = 'veo-3.1-fast-generate-preview',
   VEO = 'veo-3.1-generate-preview',
@@ -99,6 +104,7 @@ export interface GreetingRecord {
   scenicDescription?: string;
   videoUrl: string;
   voice?: VoiceGender;
+  speaker?: Speaker;
   voiceUrl?: string; // Persistent synthesized voice
   backgroundMusicUrl?: string;
   trimStart?: number;
@@ -116,6 +122,7 @@ export interface GenerateGreetingParams {
   theme: GreetingTheme;
   scenicDescription?: string;
   voice: VoiceGender;
+  speaker: Speaker;
   userPhoto: ImageFile | null;
   scenePhoto: ImageFile | null;
   backgroundMusic: AudioFile | null;
