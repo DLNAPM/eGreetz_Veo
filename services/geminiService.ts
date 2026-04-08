@@ -77,7 +77,17 @@ export const generateGreetingVideo = async (
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const segmentLength = 7;
-  const targetDuration = params.extended ? 14 : 7;
+  
+  // Calculate target duration based on audio duration, with a minimum of 7 seconds
+  // If extended is true, minimum is 14 seconds.
+  let targetDuration = params.extended ? 14 : 7;
+  if (params.audioDuration) {
+    // Add 1 second padding to audio duration
+    const requiredDuration = Math.ceil(params.audioDuration + 1);
+    if (requiredDuration > targetDuration) {
+      targetDuration = requiredDuration;
+    }
+  }
 
   const hasReferences = !!(params.userPhoto || params.scenePhoto);
   
@@ -116,7 +126,7 @@ export const generateGreetingVideo = async (
       config: {
         numberOfVideos: 1,
         resolution: '720p',
-        aspectRatio: '16:9',
+        aspectRatio: params.aspectRatio || '16:9',
       },
     };
 
@@ -150,6 +160,13 @@ export const generateGreetingVideo = async (
 
     const videoAsset = operation.response?.generatedVideos?.[0]?.video;
     if (!videoAsset) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/${operation.name}?key=${process.env.API_KEY}`;
+        const rawResponse = await fetch(url).then(res => res.json());
+        console.error("[Gemini] EMPTY_RESULT. Raw API response:", JSON.stringify(rawResponse, null, 2));
+      } catch (e) {
+        console.error("[Gemini] EMPTY_RESULT. Could not fetch raw response:", e);
+      }
       throw new Error("EMPTY_RESULT");
     }
 
@@ -176,7 +193,7 @@ export const generateGreetingVideo = async (
           config: {
             numberOfVideos: 1,
             resolution: '720p',
-            aspectRatio: '16:9',
+            aspectRatio: params.aspectRatio || '16:9',
           }
         };
 
@@ -213,7 +230,7 @@ export const generateGreetingVideo = async (
     }
   } catch (error: any) {
     console.error("[Gemini] Production Pipeline Failure:", error);
-    throw new Error(error.message === "EMPTY_RESULT" ? "Model generation error. Try simplifying your description." : error.message);
+    throw error;
   }
   throw new Error('Video production pipeline failure.');
 };

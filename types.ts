@@ -129,6 +129,7 @@ export interface GenerateGreetingParams {
   model: VeoModel;
   aspectRatio: AspectRatio;
   extended: boolean;
+  audioDuration?: number;
   trimStart?: number;
   trimEnd?: number;
   fadeOut?: boolean;

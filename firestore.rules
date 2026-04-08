@@ -24,14 +24,16 @@ service cloud.firestore {
       
       // Allow users to list (query) greetings shared specifically WITH them based on their Google Email
       allow list: if request.auth != null && 
-                  request.auth.token.email.toLowerCase() == resource.data.recipientEmail.toLowerCase();
+                  request.auth.token.email != null &&
+                  resource.data.recipientEmail == request.auth.token.email.lower();
       
       // Allow any authenticated user to create a share record (sending to someone)
       allow create: if request.auth != null;
       
       // Only the recipient can delete a shared record from their inbox
       allow delete: if request.auth != null && 
-                    request.auth.token.email.toLowerCase() == resource.data.recipientEmail.toLowerCase();
+                    request.auth.token.email != null &&
+                    resource.data.recipientEmail == request.auth.token.email.lower();
     }
   }
 }

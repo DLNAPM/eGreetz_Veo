@@ -182,10 +182,15 @@ const App: React.FC = () => {
     setAppState(AppState.LOADING);
     
     try {
-      const [videoResult, voiceResult] = await Promise.all([
-        generateGreetingVideo(params),
-        generateGreetingVoice(params)
-      ]);
+      // Generate voice first to get duration
+      const voiceResult = await generateGreetingVoice(params);
+      
+      if (voiceResult) {
+        params.audioDuration = voiceResult.duration;
+      }
+
+      // Generate video, passing the audio duration if available
+      const videoResult = await generateGreetingVideo(params);
       
       let videoUrl = "";
       let voiceUrl = "";
