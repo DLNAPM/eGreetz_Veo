@@ -529,7 +529,7 @@ const GreetingCreator: React.FC<Props> = ({ onGenerate, onCancel, initialData })
               userPhoto: photo, 
               scenePhoto,
               backgroundMusic: audioFile,
-              model: VeoModel.VEO_FAST, 
+              model: VeoModel.VEO_LITE, 
               aspectRatio: AspectRatio.LANDSCAPE,
               extended 
             })}

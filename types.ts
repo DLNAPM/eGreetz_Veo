@@ -58,7 +58,7 @@ export enum Speaker {
 }
 
 export enum VeoModel {
-  VEO_FAST = 'veo-3.1-fast-generate-preview',
+  VEO_LITE = 'veo-3.1-lite-generate-preview',
   VEO = 'veo-3.1-generate-preview',
 }
 

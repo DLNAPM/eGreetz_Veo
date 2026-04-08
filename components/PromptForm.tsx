@@ -227,7 +227,7 @@ const PromptForm: React.FC<PromptFormProps> = ({
 }) => {
   const [prompt, setPrompt] = useState(initialValues?.prompt ?? '');
   const [model, setModel] = useState<VeoModel>(
-    initialValues?.model ?? VeoModel.VEO_FAST,
+    initialValues?.model ?? VeoModel.VEO_LITE,
   );
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>(
     initialValues?.aspectRatio ?? AspectRatio.LANDSCAPE,
@@ -267,7 +267,7 @@ const PromptForm: React.FC<PromptFormProps> = ({
   useEffect(() => {
     if (initialValues) {
       setPrompt(initialValues.prompt ?? '');
-      setModel(initialValues.model ?? VeoModel.VEO_FAST);
+      setModel(initialValues.model ?? VeoModel.VEO_LITE);
       setAspectRatio(initialValues.aspectRatio ?? AspectRatio.LANDSCAPE);
       setResolution(initialValues.resolution ?? Resolution.P720);
       setGenerationMode(initialValues.mode ?? GenerationMode.TEXT_TO_VIDEO);

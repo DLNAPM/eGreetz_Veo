@@ -85,7 +85,7 @@ export const generateGreetingVideo = async (
     // Force the higher quality model if using references or specific modes
     const modelToUse = modelOverride || (hasReferences 
       ? 'veo-3.1-generate-preview' 
-      : 'veo-3.1-fast-generate-preview');
+      : 'veo-3.1-lite-generate-preview');
 
     const effectiveTheme = params.theme === GreetingTheme.NONE ? "" : params.theme;
     const environment = params.scenicDescription || effectiveTheme || "Cinematic Studio";
@@ -142,9 +142,10 @@ export const generateGreetingVideo = async (
     while (!operation.done) {
       await new Promise((resolve) => setTimeout(resolve, 10000));
       operation = await ai.operations.getVideosOperation({ operation: operation });
-      if (operation.error) {
-        throw new Error(operation.error.message);
-      }
+    }
+
+    if (operation.error) {
+      throw new Error(operation.error.message);
     }
 
     const videoAsset = operation.response?.generatedVideos?.[0]?.video;
@@ -183,8 +184,8 @@ export const generateGreetingVideo = async (
         while (!extendOp.done) {
           await new Promise((resolve) => setTimeout(resolve, 10000));
           extendOp = await ai.operations.getVideosOperation({ operation: extendOp });
-          if (extendOp.error) break; 
         }
+        if (extendOp.error) break;
         
         const extendedAsset = extendOp.response?.generatedVideos?.[0]?.video;
         if (extendedAsset) {
@@ -200,7 +201,12 @@ export const generateGreetingVideo = async (
 
     const downloadLink = currentVideoAsset?.uri;
     if (downloadLink) {
-      const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+      const response = await fetch(downloadLink, {
+        method: 'GET',
+        headers: {
+          'x-goog-api-key': process.env.API_KEY || '',
+        },
+      });
       if (!response.ok) throw new Error("Failed to download video asset.");
       const blob = await response.blob();
       return { objectUrl: URL.createObjectURL(blob), blob };
