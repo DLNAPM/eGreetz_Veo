@@ -23,9 +23,11 @@ service cloud.firestore {
       allow get: if true;
       
       // Allow users to list (query) greetings shared specifically WITH them based on their Google Email
+      // Note: Removed .lower() from rule to prevent Firestore query static analysis failures.
+      // The client should query using the exact email string from auth.token.email
       allow list: if request.auth != null && 
                   request.auth.token.email != null &&
-                  resource.data.recipientEmail == request.auth.token.email.lower();
+                  (resource.data.recipientEmail == request.auth.token.email || resource.data.recipientEmail == request.auth.token.email.lower());
       
       // Allow any authenticated user to create a share record (sending to someone)
       allow create: if request.auth != null;

@@ -255,7 +255,7 @@ export const getReceivedGreetings = async (email: string): Promise<GreetingRecor
   try {
     const q = query(
       collection(db, 'shared_greetings'),
-      where('recipientEmail', '==', email.toLowerCase())
+      where('recipientEmail', '==', email)
     );
     const snapshot = await getDocs(q);
     const results = snapshot.docs.map(doc => ({ 
