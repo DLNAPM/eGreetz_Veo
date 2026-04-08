@@ -164,7 +164,15 @@ export const generateGreetingVideo = async (
         const url = `https://generativelanguage.googleapis.com/v1beta/${operation.name}?key=${process.env.API_KEY}`;
         const rawResponse = await fetch(url).then(res => res.json());
         console.error("[Gemini] EMPTY_RESULT. Raw API response:", JSON.stringify(rawResponse, null, 2));
+        
+        const raiReasons = rawResponse?.response?.generateVideoResponse?.raiMediaFilteredReasons;
+        if (raiReasons && raiReasons.length > 0) {
+          throw new Error(`Generation blocked by safety filter: ${raiReasons[0]}`);
+        }
       } catch (e) {
+        if (e instanceof Error && e.message.includes('Generation blocked')) {
+          throw e; // Re-throw the specific RAI error
+        }
         console.error("[Gemini] EMPTY_RESULT. Could not fetch raw response:", e);
       }
       throw new Error("EMPTY_RESULT");
@@ -178,6 +186,9 @@ export const generateGreetingVideo = async (
     try {
       currentVideoAsset = await runGeneration();
     } catch (e: any) {
+      if (e instanceof Error && e.message.includes('Generation blocked')) {
+        throw e; // Don't retry if it's a safety filter issue
+      }
       console.warn("[Gemini] First attempt failed, retrying with stable model...");
       currentVideoAsset = await runGeneration(VeoModel.VEO);
     }
